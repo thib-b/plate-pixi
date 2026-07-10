@@ -226,8 +226,9 @@ export class Organism {
    * @param {number} plateY - Plate center y
    * @param {number} plateRadius - Plate radius for boundary checking
    * @param {TrailSystem} trailSystem - Trail system for sensing and depositing
+   * @param {number} growthProgress - Plate growth progress (0-1) for slowdown
    */
-  update(delta, plateX, plateY, plateRadius, trailSystem) {
+  update(delta, plateX, plateY, plateRadius, trailSystem, growthProgress = 0) {
     // Update plate reference
     this.plateX = plateX;
     this.plateY = plateY;
@@ -235,6 +236,9 @@ export class Organism {
     
     // Store trail system reference for sensing
     this.trailSystem = trailSystem;
+    
+    // Store growth progress for speed scaling
+    this.growthProgress = growthProgress;
     
     // Sense environment
     this.sense();
@@ -296,6 +300,19 @@ export class Organism {
   move(delta) {
     const { speed } = this.config;
     
+    // Calculate speed multiplier based on plate growth progress
+    // At progress=0, speedMultiplier=1 (full speed)
+    // At progress=1, speedMultiplier=0 (stopped)
+    const speedMultiplier = 1 - this.growthProgress;
+    const effectiveSpeed = speed * speedMultiplier;
+    
+    // If plate is finished, don't move at all
+    if (this.growthProgress >= 1) {
+      this.vx = 0;
+      this.vy = 0;
+      return;
+    }
+    
     // Simple decision logic with high randomness:
     const { left, center, right } = this.sensors;
     
@@ -305,31 +322,31 @@ export class Organism {
     if (center > left * 1.05 && center > right * 1.05) {
       // Trail ahead - continue straight with slight forward boost and small random variation
       const randomVariation = degreesToRadians((Math.random() - 0.5) * 20);
-      this.vx = Math.cos(currentAngle + randomVariation) * speed * 1.05;
-      this.vy = Math.sin(currentAngle + randomVariation) * speed * 1.05;
+      this.vx = Math.cos(currentAngle + randomVariation) * effectiveSpeed * 1.05;
+      this.vy = Math.sin(currentAngle + randomVariation) * effectiveSpeed * 1.05;
     } else if (left > right * 1.02) {
       // Trail to left - turn left with randomness
       const turnAmount = degreesToRadians(20 + Math.random() * 20);
-      this.vx = Math.cos(currentAngle + turnAmount) * speed;
-      this.vy = Math.sin(currentAngle + turnAmount) * speed;
+      this.vx = Math.cos(currentAngle + turnAmount) * effectiveSpeed;
+      this.vy = Math.sin(currentAngle + turnAmount) * effectiveSpeed;
     } else if (right > left * 1.02) {
       // Trail to right - turn right with randomness
       const turnAmount = degreesToRadians(20 + Math.random() * 20);
-      this.vx = Math.cos(currentAngle - turnAmount) * speed;
-      this.vy = Math.sin(currentAngle - turnAmount) * speed;
+      this.vx = Math.cos(currentAngle - turnAmount) * effectiveSpeed;
+      this.vy = Math.sin(currentAngle - turnAmount) * effectiveSpeed;
     } else {
       // No strong trail - highly random movement
       // Add significant random direction change
       const randomTurn = degreesToRadians((Math.random() - 0.5) * 120); // ±60 degrees
-      this.vx = Math.cos(currentAngle + randomTurn) * speed;
-      this.vy = Math.sin(currentAngle + randomTurn) * speed;
+      this.vx = Math.cos(currentAngle + randomTurn) * effectiveSpeed;
+      this.vy = Math.sin(currentAngle + randomTurn) * effectiveSpeed;
     }
     
     // Limit speed
     const currentSpeed = Math.sqrt(this.vx * this.vx + this.vy * this.vy);
-    if (currentSpeed > speed * 2) {
-      this.vx = (this.vx / currentSpeed) * speed * 2;
-      this.vy = (this.vy / currentSpeed) * speed * 2;
+    if (currentSpeed > effectiveSpeed * 2) {
+      this.vx = (this.vx / currentSpeed) * effectiveSpeed * 2;
+      this.vy = (this.vy / currentSpeed) * effectiveSpeed * 2;
     }
     
     // Apply velocity - REDUCED multiplier for slower, more organic growth
