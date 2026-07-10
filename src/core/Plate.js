@@ -374,14 +374,11 @@ export class Plate {
     });
     
     // Try to spawn new organisms at untrailed locations
-    const spawned = this.trySpawnNewOrganism();
-    if (spawned) {
-      console.log(`Spawned new site. Total spawn sites: ${this.spawnSites.length}`);
-    }
+    this.trySpawnNewOrganism();
     
     // Check if all organisms are dead - plate is finished
-    const allDead = this.organisms.every(org => !org.isAlive());
-    if (allDead && !this.isFinished) {
+    // Only mark finished if we've had spawn sites and all organisms are dead
+    if (this.spawnSites.length > 0 && this.organisms.every(org => !org.isAlive()) && !this.isFinished) {
       this.isFinished = true;
       this.isGrowing = false;
       console.log('Plate finished - all organisms have died');
