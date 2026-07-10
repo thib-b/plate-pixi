@@ -39,6 +39,8 @@ export class Plate {
       growthPattern: 'radial',
       trailCellSize: 4, // Larger cells for more visible trails
       growthDuration: 60, // 60 seconds for testing
+      spawnBaseProbability: 0.004, // Base spawn probability per frame
+      spawnTrailThreshold: 5, // Max trail value for spawning (find untrailed areas)
       ...config
     };
     
@@ -77,6 +79,11 @@ export class Plate {
     
     // Track start time for accurate time-based aging
     this.startTime = Date.now();
+    
+    // Spawn tracking
+    this.spawnSites = []; // Array of { x, y, color } for tracking spawn locations
+    this.spawnAttempts = 0;
+    this.maxSpawnAttemptsPerFrame = 10; // Limit attempts to find untrailed spot
     
     // Add organisms to container
     this.organisms.forEach(org => {
@@ -206,6 +213,73 @@ export class Plate {
   }
   
   /**
+   * Try to spawn a new organism at a random untrailed location
+   * @returns {boolean} True if spawn was successful
+   */
+  trySpawnNewOrganism() {
+    const foodDyeColors = Object.values(FOOD_DYE_COLORS);
+    
+    // Calculate spawn probability based on growth progress
+    // Probability decays as plate ages: higher early, lower later
+    const spawnProbability = this.config.spawnBaseProbability * (1 - this.growthProgress);
+    
+    // Check if we should attempt a spawn
+    if (Math.random() >= spawnProbability) {
+      return false;
+    }
+    
+    // Try to find an untrailed location
+    for (let attempt = 0; attempt < this.maxSpawnAttemptsPerFrame; attempt++) {
+      // Generate random position within plate radius
+      const angle = Math.random() * Math.PI * 2;
+      const distance = Math.random() * this.config.radius * 0.9; // Within 90% of radius
+      const x = Math.cos(angle) * distance;
+      const y = Math.sin(angle) * distance;
+      
+      // Check if this location has low trail density
+      const trailValue = this.trailSystem.getValueInterpolated(x, y);
+      if (trailValue <= this.config.spawnTrailThreshold) {
+        // Found a good spot - spawn a new organism
+        // Use a new color (cycle through available colors)
+        const newColor = foodDyeColors[this.spawnSites.length % foodDyeColors.length];
+        
+        // Create organism config for spawn
+        const spawnConfig = {
+          size: this.config.organismSize,
+          speed: this.config.organismSpeed * 0.2,
+          sensorAngle: this.config.sensorAngle,
+          sensorDistance: this.config.sensorDistance * 1.5,
+          trailWeight: this.config.trailWeight * 3,
+          color: newColor,
+          organismType: this.config.organismType,
+          lifespan: this.config.growthDuration * (0.5 + Math.random() * 0.5),
+          growthMode: true,
+          seedIndex: this.spawnSites.length
+        };
+        
+        const organism = new Organism(
+          spawnConfig,
+          x, y,
+          0, 0
+        );
+        
+        organism.x = x;
+        organism.y = y;
+        
+        this.organisms.push(organism);
+        this.container.addChild(organism.getGraphics());
+        
+        // Track spawn site
+        this.spawnSites.push({ x, y, color: newColor });
+        
+        return true;
+      }
+    }
+    
+    return false;
+  }
+  
+  /**
    * Remove an organism from the plate
    * @param {Organism} organism - Organism to remove
    */
@@ -289,6 +363,9 @@ export class Plate {
       }
     });
     
+    // Try to spawn new organisms at untrailed locations
+    this.trySpawnNewOrganism();
+    
     // Check if all organisms are dead - plate is finished
     const allDead = this.organisms.every(org => !org.isAlive());
     if (allDead && !this.isFinished) {
@@ -331,6 +408,7 @@ export class Plate {
     this.isGrowing = true;
     this.isFinished = false;
     this.startTime = Date.now();
+    this.spawnSites = []; // Reset spawn tracking
     
     // Create new organisms
     this.createOrganisms(this.config.organismCount);
