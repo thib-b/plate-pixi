@@ -51,7 +51,7 @@ export const FOOD_DYE_COLORS = {
 export const AGAR_COLORS = {
   // Base agar color (slightly translucent)
   base: 0xFFFFFF,
-  baseAlpha: 0.05,
+  baseAlpha: 0.15,
   
   // Border color
   border: 0x333333,
