@@ -70,9 +70,12 @@ export class Plate {
     this.createOrganisms(this.config.organismCount);
     
     // State
-    this.age = 0; // Time since creation
+    this.age = 0; // Time since creation (in seconds)
     this.growthProgress = 0; // 0-1
     this.isGrowing = true;
+    
+    // Track start time for accurate time-based aging
+    this.startTime = Date.now();
     
     // Add organisms to container
     this.organisms.forEach(org => {
@@ -256,8 +259,8 @@ export class Plate {
   update(delta) {
     if (!this.isGrowing) return;
     
-    // Update age
-    this.age += delta;
+    // Update age based on actual time elapsed (not delta frames)
+    this.age = (Date.now() - this.startTime) / 1000;
     
     // Calculate growth progress (0-1) based on growthDuration (default 600s = 10 min)
     this.growthProgress = Math.min(this.age / this.config.growthDuration, 1);
@@ -314,6 +317,7 @@ export class Plate {
     this.age = 0;
     this.growthProgress = 0;
     this.isGrowing = true;
+    this.startTime = Date.now();
     
     // Create new organisms
     this.createOrganisms(this.config.organismCount);
