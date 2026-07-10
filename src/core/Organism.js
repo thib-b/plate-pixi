@@ -73,6 +73,7 @@ export class Organism {
     
     // Create PixiJS graphics for rendering
     this.graphics = this.createGraphics();
+    this.graphics.alpha = 0; // Hide particles, show only trails
     
     // Set initial position of the Graphics object
     this.graphics.x = this.x;
