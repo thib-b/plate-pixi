@@ -73,6 +73,7 @@ export class Plate {
     this.age = 0; // Time since creation (in seconds)
     this.growthProgress = 0; // 0-1
     this.isGrowing = true;
+    this.isFinished = false; // Plate is finished when all organisms are dead
     
     // Track start time for accurate time-based aging
     this.startTime = Date.now();
@@ -180,6 +181,8 @@ export class Plate {
       trailWeight: this.config.trailWeight * 3, // Heavier trails for stronger reinforcement
       color: seedColor, // Each seed has its own color
       organismType: this.config.organismType,
+      // Individual lifespan - random within plate's growth duration
+      lifespan: this.config.growthDuration * (0.5 + Math.random() * 0.5),
       // Growth-specific parameters
       growthMode: true,
       seedIndex: seedIndex
@@ -265,25 +268,34 @@ export class Plate {
     // Calculate growth progress (0-1) based on growthDuration (default 600s = 10 min)
     this.growthProgress = Math.min(this.age / this.config.growthDuration, 1);
     
-    // Update each organism - pass growthProgress for slowdown
+    // Update each organism - they now manage their own lifespan
     this.organisms.forEach(organism => {
       organism.update(
         delta,
         0, 0, // Plate center relative to organism
         this.config.radius,
-        this.trailSystem,
-        this.growthProgress // Pass progress so organisms can slow down
+        this.trailSystem
       );
       
-      // Deposit trail with organism's color
-      const deposit = organism.getTrailDeposit();
-      this.trailSystem.deposit(
-        organism.x,
-        organism.y,
-        deposit,
-        organism.config.color  // Pass organism's color for colored trails
-      );
+      // Deposit trail with organism's color (only if alive)
+      if (organism.isAlive()) {
+        const deposit = organism.getTrailDeposit();
+        this.trailSystem.deposit(
+          organism.x,
+          organism.y,
+          deposit,
+          organism.config.color  // Pass organism's color for colored trails
+        );
+      }
     });
+    
+    // Check if all organisms are dead - plate is finished
+    const allDead = this.organisms.every(org => !org.isAlive());
+    if (allDead && !this.isFinished) {
+      this.isFinished = true;
+      this.isGrowing = false;
+      console.log('Plate finished - all organisms have died');
+    }
     
     // Update trail system (apply decay)
     this.trailSystem.update(delta, this.config.decayRate);
@@ -317,6 +329,7 @@ export class Plate {
     this.age = 0;
     this.growthProgress = 0;
     this.isGrowing = true;
+    this.isFinished = false;
     this.startTime = Date.now();
     
     // Create new organisms
@@ -382,6 +395,22 @@ export class Plate {
    */
   getGrowthProgress() {
     return this.growthProgress;
+  }
+  
+  /**
+   * Check if plate is finished (all organisms dead)
+   * @returns {boolean}
+   */
+  getIsFinished() {
+    return this.isFinished;
+  }
+  
+  /**
+   * Get count of alive organisms
+   * @returns {number}
+   */
+  getAliveOrganismCount() {
+    return this.organisms.filter(org => org.isAlive()).length;
   }
   
   /**
