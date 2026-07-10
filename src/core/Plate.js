@@ -374,7 +374,10 @@ export class Plate {
     });
     
     // Try to spawn new organisms at untrailed locations
-    this.trySpawnNewOrganism();
+    const spawned = this.trySpawnNewOrganism();
+    if (spawned) {
+      console.log(`Spawned new site. Total spawn sites: ${this.spawnSites.length}`);
+    }
     
     // Check if all organisms are dead - plate is finished
     const allDead = this.organisms.every(org => !org.isAlive());
