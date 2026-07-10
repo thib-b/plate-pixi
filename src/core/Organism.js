@@ -64,6 +64,10 @@ export class Organism {
     // Random variation for uniqueness
     this.variation = random();
     
+    // Individual aging
+    this.birthTime = Date.now();
+    this.lifespan = this.config.lifespan || 600; // Default 600ms for testing, will be set by plate
+    
     // Death state
     this.isDead = false;
     
@@ -229,9 +233,8 @@ export class Organism {
    * @param {number} plateY - Plate center y
    * @param {number} plateRadius - Plate radius for boundary checking
    * @param {TrailSystem} trailSystem - Trail system for sensing and depositing
-   * @param {number} growthProgress - Plate growth progress (0-1) for slowdown
    */
-  update(delta, plateX, plateY, plateRadius, trailSystem, growthProgress = 0) {
+  update(delta, plateX, plateY, plateRadius, trailSystem) {
     // Update plate reference
     this.plateX = plateX;
     this.plateY = plateY;
@@ -240,12 +243,12 @@ export class Organism {
     // Store trail system reference for sensing
     this.trailSystem = trailSystem;
     
-    // Store growth progress for speed scaling
-    this.growthProgress = growthProgress;
+    // Calculate individual age and progress
+    this.individualAge = (Date.now() - this.birthTime) / 1000; // age in seconds
+    this.individualProgress = Math.min(this.individualAge / this.lifespan, 1);
     
-    // Check for death based on growth progress
-    // Death probability increases as plate ages, reaching 100% at the end
-    if (!this.isDead && Math.random() < this.growthProgress) {
+    // Check for death based on individual lifespan
+    if (!this.isDead && this.individualProgress >= 1) {
       this.isDead = true;
       this.vx = 0;
       this.vy = 0;
@@ -316,10 +319,10 @@ export class Organism {
   move(delta) {
     const { speed } = this.config;
     
-    // Calculate speed multiplier based on plate growth progress
+    // Calculate speed multiplier based on individual progress
     // At progress=0, speedMultiplier=1 (full speed)
     // At progress=1, speedMultiplier=0 (stopped)
-    const speedMultiplier = 1 - this.growthProgress;
+    const speedMultiplier = 1 - this.individualProgress;
     const effectiveSpeed = speed * speedMultiplier;
     
     // If plate is finished, don't move at all
@@ -417,11 +420,20 @@ export class Organism {
   }
   
   /**
+   * Check if organism is alive
+   * @returns {boolean}
+   */
+  isAlive() {
+    return !this.isDead;
+  }
+  
+  /**
    * Reset organism state
    */
   reset() {
     this.isDead = false;
     this.graphics.alpha = 1;
+    this.birthTime = Date.now();
     this.vx = randomInRange(-0.5, 0.5);
     this.vy = randomInRange(-0.5, 0.5);
   }
