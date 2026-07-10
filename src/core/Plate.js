@@ -39,7 +39,7 @@ export class Plate {
       growthPattern: 'radial',
       trailCellSize: 4, // Larger cells for more visible trails
       growthDuration: 60, // 60 seconds for testing
-      spawnBaseProbability: 0.02, // Base spawn probability per frame (increased for testing)
+      spawnBaseProbability: 0.008, // Base spawn probability per frame
       spawnTrailThreshold: 5, // Max trail value for spawning (find untrailed areas)
       ...config
     };
