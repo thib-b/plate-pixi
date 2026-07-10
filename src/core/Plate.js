@@ -8,7 +8,7 @@
 import * as PIXI from 'pixi.js';
 import { Organism } from './Organism.js';
 import { TrailSystem } from './TrailSystem.js';
-import { AGAR_COLORS, FOOD_DYE_COLORS } from '../config/colors.js';
+import { AGAR_COLORS } from '../config/colors.js';
 import { randomInRange } from '../utils/random.js';
 
 /**
@@ -41,6 +41,7 @@ export class Plate {
       growthDuration: 60, // 60 seconds for testing
       spawnBaseProbability: 0.01, // Base spawn probability per frame
       spawnTrailThreshold: 5, // Max trail value for spawning (find untrailed areas)
+      palette: null, // Color palette for organisms (will be set by config)
       ...config
     };
     
@@ -176,9 +177,9 @@ export class Plate {
     const x = centerX + Math.cos(angle) * offsetRadius;
     const y = centerY + Math.sin(angle) * offsetRadius;
     
-    // Each seed has its own color from the food dye palette
-    const foodDyeColors = Object.values(FOOD_DYE_COLORS);
-    const seedColor = foodDyeColors[seedIndex % foodDyeColors.length];
+    // Each seed has its own color from the plate's palette
+    const palette = this.config.palette || [0xFFFFFF, 0xFF0000, 0x00FF00, 0x0000FF];
+    const seedColor = palette[seedIndex % palette.length];
     
     const organismConfig = {
       size: this.config.organismSize,
@@ -217,8 +218,6 @@ export class Plate {
    * @returns {boolean} True if spawn was successful
    */
   trySpawnNewOrganism() {
-    const foodDyeColors = Object.values(FOOD_DYE_COLORS);
-    
     // Calculate spawn probability based on growth progress
     // Probability decays as plate ages: higher early, lower later
     const spawnProbability = this.config.spawnBaseProbability * (1 - this.growthProgress);
@@ -240,8 +239,9 @@ export class Plate {
       const trailValue = this.trailSystem.getValueInterpolated(x, y);
       if (trailValue <= this.config.spawnTrailThreshold) {
         // Found a good spot - spawn a group of organisms (50-150)
-        // Use a new color (cycle through available colors)
-        const newColor = foodDyeColors[this.spawnSites.length % foodDyeColors.length];
+        // Use a new color from the plate's palette (cycle through palette colors)
+        const palette = this.config.palette || [0xFFFFFF, 0xFF0000, 0x00FF00, 0x0000FF];
+        const newColor = palette[this.spawnSites.length % palette.length];
         const spawnCount = 50 + Math.floor(Math.random() * 101); // 50-150 organisms
         
         // Create organism config for spawn
