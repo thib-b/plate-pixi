@@ -295,43 +295,34 @@ export class Organism {
    */
   move(delta) {
     const { speed } = this.config;
-    const turnSpeed = speed * 0.5;
     
-    // Grow from center: add outward bias (away from plate center)
-    // This creates organic branching patterns
-    const dx = this.x - this.plateX;
-    const dy = this.y - this.plateY;
-    const distFromCenter = Math.sqrt(dx * dx + dy * dy);
-    
-    // Calculate outward direction (normalized vector from center to organism)
-    const outwardBias = this.config.growthMode ? 0.3 : 0;
-    
-    // Simple decision logic (like p5plates):
-    // Strongly prefer following trails, with slight outward bias
+    // Simple decision logic with high randomness:
     const { left, center, right } = this.sensors;
     
-    // Stronger trail following - organisms stick to existing trails
-    if (center > left * 1.2 && center > right * 1.2) {
-      // Strong trail ahead - continue straight with slight forward boost
-      this.vx *= 1.05;
-      this.vy *= 1.05;
-    } else if (left > right * 1.1) {
-      // Stronger trail to left - turn left more aggressively
-      const angle = Math.atan2(this.vy, this.vx);
-      this.vx = Math.cos(angle + degreesToRadians(20)) * speed;
-      this.vy = Math.sin(angle + degreesToRadians(20)) * speed;
-    } else if (right > left * 1.1) {
-      // Stronger trail to right - turn right more aggressively
-      const angle = Math.atan2(this.vy, this.vx);
-      this.vx = Math.cos(angle - degreesToRadians(20)) * speed;
-      this.vy = Math.sin(angle - degreesToRadians(20)) * speed;
+    const currentAngle = Math.atan2(this.vy, this.vx);
+    
+    // Trail following with lower thresholds for more exploration
+    if (center > left * 1.05 && center > right * 1.05) {
+      // Trail ahead - continue straight with slight forward boost and small random variation
+      const randomVariation = degreesToRadians((Math.random() - 0.5) * 20);
+      this.vx = Math.cos(currentAngle + randomVariation) * speed * 1.05;
+      this.vy = Math.sin(currentAngle + randomVariation) * speed * 1.05;
+    } else if (left > right * 1.02) {
+      // Trail to left - turn left with randomness
+      const turnAmount = degreesToRadians(20 + Math.random() * 20);
+      this.vx = Math.cos(currentAngle + turnAmount) * speed;
+      this.vy = Math.sin(currentAngle + turnAmount) * speed;
+    } else if (right > left * 1.02) {
+      // Trail to right - turn right with randomness
+      const turnAmount = degreesToRadians(20 + Math.random() * 20);
+      this.vx = Math.cos(currentAngle - turnAmount) * speed;
+      this.vy = Math.sin(currentAngle - turnAmount) * speed;
     } else {
-      // No strong trail - add outward bias and slight randomness
-      const angle = Math.atan2(this.vy, this.vx);
-      const outwardAngle = Math.atan2(dy, dx); // Direction away from center
-      const blendedAngle = angle * 0.7 + outwardAngle * 0.3; // Blend current with outward
-      this.vx = Math.cos(blendedAngle) * speed * 1.2;
-      this.vy = Math.sin(blendedAngle) * speed * 1.2;
+      // No strong trail - highly random movement
+      // Add significant random direction change
+      const randomTurn = degreesToRadians((Math.random() - 0.5) * 120); // ±60 degrees
+      this.vx = Math.cos(currentAngle + randomTurn) * speed;
+      this.vy = Math.sin(currentAngle + randomTurn) * speed;
     }
     
     // Limit speed
@@ -342,7 +333,7 @@ export class Organism {
     }
     
     // Apply velocity - REDUCED multiplier for slower, more organic growth
-    this.x += this.vx * delta * 5; // Changed from 60 to 5 for growth patterns
+    this.x += this.vx * delta * 5;
     this.y += this.vy * delta * 5;
   }
   

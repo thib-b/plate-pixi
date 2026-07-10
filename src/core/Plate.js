@@ -89,18 +89,17 @@ export class Plate {
   createPlateVisual() {
     const g = new PIXI.Graphics();
     
-    // Draw the plate edge - light grey ring representing the physical plate
-    // Slightly larger than the agar to show the plate edge
-    const plateEdgeRadius = this.config.radius * 1.05;
-    g.beginFill(0xE0E0E0, 0.3); // Light grey with slight transparency
-    g.drawCircle(0, 0, plateEdgeRadius);
-    g.endFill();
-    
-    // Draw the agar base with plate color (semi-transparent) on top of the plate edge
+    // Draw the agar base with plate color (semi-transparent)
     // This tint matches the general color theme of the organisms
     g.beginFill(this.config.baseColor, AGAR_COLORS.baseAlpha);
     g.drawCircle(0, 0, this.config.radius);
     g.endFill();
+    
+    // Draw the plate edge - light grey outline representing the physical plate
+    // Thin stroke at slightly larger radius
+    const plateEdgeRadius = this.config.radius * 1.02;
+    g.lineStyle(2, 0xF0F0F0, 0.8); // Lighter grey, thinner (2px), more opaque
+    g.drawCircle(0, 0, plateEdgeRadius);
     
     // Draw border on top - dark outline at the agar edge
     g.lineStyle(AGAR_COLORS.borderWidth, AGAR_COLORS.border, AGAR_COLORS.borderAlpha);
@@ -118,9 +117,21 @@ export class Plate {
     const seedCount = 3;
     const organismsPerSeed = Math.ceil(count / seedCount);
     
+    // Pre-calculate random seed positions ONCE - anywhere on the plate
+    const seedPositions = [];
+    for (let i = 0; i < seedCount; i++) {
+      const seedAngle = Math.random() * Math.PI * 2;
+      const seedDistance = Math.random() * this.config.radius * 0.9; // Anywhere up to 90% of radius
+      seedPositions.push({
+        x: Math.cos(seedAngle) * seedDistance,
+        y: Math.sin(seedAngle) * seedDistance
+      });
+    }
+    
+    // Pass the same seed position to all organisms in that seed
     for (let seedIndex = 0; seedIndex < seedCount; seedIndex++) {
       for (let i = 0; i < organismsPerSeed; i++) {
-        this.addOrganism(seedIndex);
+        this.addOrganism(seedIndex, seedPositions[seedIndex]);
       }
     }
   }
@@ -129,16 +140,27 @@ export class Plate {
    * Add a single organism to the plate
    * @returns {Organism} The new organism
    */
-  addOrganism(seedIndex = 0) {
-    // Multi-seed growth: 3 starting points at 120° intervals
-    const seedAngle = (seedIndex / 3) * Math.PI * 2; // 0°, 120°, 240°
-    const startRadius = this.config.radius * 0.1; // Start near center (10% of radius)
-    const centerX = Math.cos(seedAngle) * startRadius;
-    const centerY = Math.sin(seedAngle) * startRadius;
+  addOrganism(seedIndex = 0, seedPosition = null) {
+    // Multi-seed growth: 3 starting points at random positions near center
+    // seedPosition is pre-calculated in createOrganisms to ensure all organisms
+    // in the same seed share the same center point
+    
+    let centerX, centerY;
+    if (seedPosition) {
+      // Use the pre-calculated seed position
+      centerX = seedPosition.x;
+      centerY = seedPosition.y;
+    } else {
+      // Fallback: generate random position (for addOrganisms called directly)
+      const seedAngle = Math.random() * Math.PI * 2;
+      const seedDistance = Math.random() * this.config.radius * 0.9; // Anywhere on plate
+      centerX = Math.cos(seedAngle) * seedDistance;
+      centerY = Math.sin(seedAngle) * seedDistance;
+    }
     
     // Random position near this seed point
     const angle = Math.random() * Math.PI * 2;
-    const offsetRadius = startRadius * 0.3; // Small cluster around seed
+    const offsetRadius = this.config.radius * 0.2 * 0.2; // Small cluster around seed
     const x = centerX + Math.cos(angle) * offsetRadius;
     const y = centerY + Math.sin(angle) * offsetRadius;
     
@@ -198,9 +220,20 @@ export class Plate {
     const seedCount = 3;
     const organismsPerSeed = Math.ceil(count / seedCount);
     
+    // Pre-calculate random seed positions for new organisms - anywhere on plate
+    const seedPositions = [];
+    for (let i = 0; i < seedCount; i++) {
+      const seedAngle = Math.random() * Math.PI * 2;
+      const seedDistance = Math.random() * this.config.radius * 0.9; // Anywhere up to 90% of radius
+      seedPositions.push({
+        x: Math.cos(seedAngle) * seedDistance,
+        y: Math.sin(seedAngle) * seedDistance
+      });
+    }
+    
     for (let seedIndex = 0; seedIndex < seedCount; seedIndex++) {
       for (let i = 0; i < organismsPerSeed; i++) {
-        this.addOrganism(seedIndex);
+        this.addOrganism(seedIndex, seedPositions[seedIndex]);
       }
     }
   }
