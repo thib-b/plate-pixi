@@ -80,8 +80,18 @@ class PlateApp {
     const organismCount = this.plateManager.getTotalOrganismCount();
     const plateCount = this.plateManager.plates.size;
     
+    // Get alive count from first plate (or sum across all plates)
+    let aliveCount = 0;
+    if (this.plateManager.plates.size > 0) {
+      const firstPlate = this.plateManager.plates.values().next().value;
+      if (firstPlate) {
+        aliveCount = firstPlate.getAliveOrganismCount();
+      }
+    }
+    
     document.getElementById('fps').textContent = fps;
     document.getElementById('organism-count').textContent = organismCount;
+    document.getElementById('alive-count').textContent = aliveCount;
     document.getElementById('plate-count').textContent = plateCount;
   }
   
