@@ -18,10 +18,12 @@ window.plateManager = null;
 class PlateApp {
   constructor() {
     // Configuration
+    // Random dark background color
+    const randomBackground = Math.floor(Math.random() * 0x333333);
     this.config = {
       width: window.innerWidth,
       height: window.innerHeight,
-      backgroundColor: 0x1a1a2e,
+      backgroundColor: randomBackground,
       antialias: true,
       resolution: window.devicePixelRatio || 1
     };
