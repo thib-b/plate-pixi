@@ -1,0 +1,30 @@
+{
+  "name": "platev3",
+  "version": "0.1.0",
+  "description": "Core plate simulation engine for Robocobra Quartet's The 100 album - PixiJS-based 2D simulation",
+  "main": "src/index.js",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [
+    "pixi.js",
+    "simulation",
+    "plates",
+    "petri-dish",
+    "mold",
+    "growth",
+    "robocobra-quartet"
+  ],
+  "author": "thib",
+  "license": "MIT",
+  "dependencies": {
+    "pixi.js": "^7.3.0"
+  },
+  "devDependencies": {
+    "vite": "^5.0.0"
+  }
+}

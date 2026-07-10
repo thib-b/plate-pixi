@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>platev3 - Plate Simulation</title>
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+    
+    body {
+      background: #1a1a2e;
+      color: #ffffff;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, sans-serif;
+      overflow: hidden;
+      height: 100vh;
+      width: 100vw;
+    }
+    
+    #app {
+      height: 100%;
+      width: 100%;
+    }
+    
+    /* Info overlay */
+    #info {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 15px;
+      border-radius: 8px;
+      font-size: 14px;
+      max-width: 300px;
+      z-index: 100;
+    }
+    
+    #info h1 {
+      font-size: 18px;
+      margin-bottom: 10px;
+      color: #ffffff;
+    }
+    
+    #info .stat {
+      margin: 5px 0;
+      color: #cccccc;
+    }
+    
+    #info .stat span {
+      color: #ffffff;
+      font-weight: bold;
+    }
+    
+    /* Loading */
+    #loading {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      color: #ffffff;
+      font-size: 24px;
+    }
+    
+    /* Debug panel */
+    #debug {
+      position: absolute;
+      bottom: 20px;
+      left: 20px;
+      background: rgba(0, 0, 0, 0.7);
+      padding: 10px;
+      border-radius: 8px;
+      font-size: 12px;
+      z-index: 100;
+      display: none;
+    }
+    
+    #debug.active {
+      display: block;
+    }
+    
+    #debug button {
+      background: #333;
+      color: #fff;
+      border: none;
+      padding: 5px 10px;
+      margin: 5px;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    
+    #debug button:hover {
+      background: #555;
+    }
+  </style>
+</head>
+<body>
+  <div id="app"></div>
+  
+  <div id="info">
+    <h1>platev3</h1>
+    <div class="stat">FPS: <span id="fps">0</span></div>
+    <div class="stat">Organisms: <span id="organism-count">0</span></div>
+    <div class="stat">Plates: <span id="plate-count">0</span></div>
+  </div>
+  
+  <div id="debug">
+    <button onclick="toggleDebug()">Toggle Debug</button>
+    <button onclick="addPlate()">Add Plate</button>
+    <button onclick="clearPlates()">Clear All</button>
+    <button onclick="addOrganisms(100)">+100 Organisms</button>
+    <button onclick="removeOrganisms(100)">-100 Organisms</button>
+  </div>
+  
+  <script type="module" src="./src/index.js"></script>
+  <script>
+    // Simple debug functions exposed to global scope
+    function toggleDebug() {
+      const debug = document.getElementById('debug');
+      debug.classList.toggle('active');
+    }
+    
+    function addPlate() {
+      if (window.plateManager) {
+        window.plateManager.addPlate();
+      }
+    }
+    
+    function clearPlates() {
+      if (window.plateManager) {
+        window.plateManager.clearPlates();
+      }
+    }
+    
+    function addOrganisms(count) {
+      if (window.plateManager && window.plateManager.plates.size > 0) {
+        const plate = window.plateManager.plates.values().next().value;
+        if (plate) {
+          plate.addOrganisms(count);
+        }
+      }
+    }
+    
+    function removeOrganisms(count) {
+      if (window.plateManager && window.plateManager.plates.size > 0) {
+        const plate = window.plateManager.plates.values().next().value;
+        if (plate) {
+          plate.removeOrganisms(count);
+        }
+      }
+    }
+  </script>
+</body>
+</html>
