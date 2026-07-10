@@ -27,7 +27,7 @@ export class Plate {
       y: 300,
       radius: 300,
       baseColor: 0xFFFFFF,
-      organismCount: 300,
+      organismCount: 0, // Disabled initial spawn - using dynamic spawning only
       organismType: 'slime',
       organismSize: 1,
       organismSpeed: 0.5,
@@ -239,9 +239,10 @@ export class Plate {
       // Check if this location has low trail density
       const trailValue = this.trailSystem.getValueInterpolated(x, y);
       if (trailValue <= this.config.spawnTrailThreshold) {
-        // Found a good spot - spawn a new organism
+        // Found a good spot - spawn a group of organisms (50-150)
         // Use a new color (cycle through available colors)
         const newColor = foodDyeColors[this.spawnSites.length % foodDyeColors.length];
+        const spawnCount = 50 + Math.floor(Math.random() * 101); // 50-150 organisms
         
         // Create organism config for spawn
         const spawnConfig = {
@@ -257,20 +258,29 @@ export class Plate {
           seedIndex: this.spawnSites.length
         };
         
-        const organism = new Organism(
-          spawnConfig,
-          x, y,
-          0, 0
-        );
-        
-        organism.x = x;
-        organism.y = y;
-        
-        this.organisms.push(organism);
-        this.container.addChild(organism.getGraphics());
+        // Spawn multiple organisms at this location
+        for (let i = 0; i < spawnCount; i++) {
+          // Small random offset from spawn center
+          const offsetAngle = Math.random() * Math.PI * 2;
+          const offsetDistance = Math.random() * this.config.radius * 0.05; // 5% of radius spread
+          const spawnX = x + Math.cos(offsetAngle) * offsetDistance;
+          const spawnY = y + Math.sin(offsetAngle) * offsetDistance;
+          
+          const organism = new Organism(
+            spawnConfig,
+            spawnX, spawnY,
+            0, 0
+          );
+          
+          organism.x = spawnX;
+          organism.y = spawnY;
+          
+          this.organisms.push(organism);
+          this.container.addChild(organism.getGraphics());
+        }
         
         // Track spawn site
-        this.spawnSites.push({ x, y, color: newColor });
+        this.spawnSites.push({ x, y, color: newColor, count: spawnCount });
         
         return true;
       }
