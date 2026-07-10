@@ -64,6 +64,9 @@ export class Organism {
     // Random variation for uniqueness
     this.variation = random();
     
+    // Death state
+    this.isDead = false;
+    
     // Create PixiJS graphics for rendering
     this.graphics = this.createGraphics();
     
@@ -240,6 +243,19 @@ export class Organism {
     // Store growth progress for speed scaling
     this.growthProgress = growthProgress;
     
+    // Check for death based on growth progress
+    // Death probability increases as plate ages, reaching 100% at the end
+    if (!this.isDead && Math.random() < this.growthProgress) {
+      this.isDead = true;
+      this.vx = 0;
+      this.vy = 0;
+      this.graphics.alpha = 0; // Make the particle disappear
+    }
+    
+    if (this.isDead) {
+      return; // Skip the rest of the update for dead organisms
+    }
+    
     // Sense environment
     this.sense();
     
@@ -398,6 +414,16 @@ export class Organism {
    */
   getGraphics() {
     return this.graphics;
+  }
+  
+  /**
+   * Reset organism state
+   */
+  reset() {
+    this.isDead = false;
+    this.graphics.alpha = 1;
+    this.vx = randomInRange(-0.5, 0.5);
+    this.vy = randomInRange(-0.5, 0.5);
   }
   
   /**
