@@ -51,8 +51,7 @@ class PlateApp {
       y: this.config.height / 2,
       radius: 300,
       baseColor: randomColor,
-      organismCount: 300,
-      organismSize: 6
+      organismCount: 0 // Dynamic spawning only
     });
     
     // Log initialization
