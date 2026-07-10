@@ -38,7 +38,7 @@ export class Plate {
       depositAmount: 5,
       growthPattern: 'radial',
       trailCellSize: 4, // Larger cells for more visible trails
-      growthDuration: 600, // 10 minutes (600 seconds) for plate to stabilize
+      growthDuration: 60, // 60 seconds for testing
       ...config
     };
     
