@@ -32,12 +32,13 @@ export class Plate {
       organismSize: 6,
       organismSpeed: 0.5,
       trailWeight: 1.0,
-      decayRate: 0.01,
+      decayRate: 0,
       sensorAngle: 45,
       sensorDistance: 30, // Increased for better trail detection
       depositAmount: 5,
       growthPattern: 'radial',
       trailCellSize: 8, // Larger cells for more visible trails
+      growthDuration: 600, // 10 minutes (600 seconds) for plate to stabilize
       ...config
     };
     
@@ -258,17 +259,17 @@ export class Plate {
     // Update age
     this.age += delta;
     
-    // Calculate growth progress (0-1) based on a target growth time
-    const growthTime = 60; // 60 seconds to fully grow
-    this.growthProgress = Math.min(this.age / growthTime, 1);
+    // Calculate growth progress (0-1) based on growthDuration (default 600s = 10 min)
+    this.growthProgress = Math.min(this.age / this.config.growthDuration, 1);
     
-    // Update each organism
+    // Update each organism - pass growthProgress for slowdown
     this.organisms.forEach(organism => {
       organism.update(
         delta,
         0, 0, // Plate center relative to organism
         this.config.radius,
-        this.trailSystem
+        this.trailSystem,
+        this.growthProgress // Pass progress so organisms can slow down
       );
       
       // Deposit trail with organism's color
