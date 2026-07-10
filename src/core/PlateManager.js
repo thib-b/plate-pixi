@@ -334,6 +334,9 @@ export class PlateManager {
       plate.update(delta);
     }
     
+    // Update trail rendering - THIS WAS MISSING!
+    this.updateTrailRendering();
+    
     // Update statistics
     this.totalOrganismCount = this.getTotalOrganismCount();
   }

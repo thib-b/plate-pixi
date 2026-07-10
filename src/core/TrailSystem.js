@@ -28,20 +28,20 @@ export class TrailSystem {
    * @param {number} [options.alpha=0.5] - Trail base alpha
    */
   constructor(width, height, options = {}) {
-    // Grid dimensions in cells
-    this.gridWidth = Math.ceil(width);
-    this.gridHeight = Math.ceil(height);
-    
-    // Configuration
+    // Configuration (apply defaults first so options can override)
     this.options = {
-      cellSize: 4,
-      decayRate: 0.01,
-      maxValue: 100,
+      cellSize: 8,
+      decayRate: 0.001, // Much slower decay for persistent trails
+      maxValue: 100, // Lower max so trails reach visible levels faster
       color: TRAIL_COLORS.default,
-      alpha: TRAIL_COLORS.defaultAlpha,
-      fadeRate: TRAIL_COLORS.fadeRate,
+      alpha: 0.8, // More visible trails
+      fadeRate: TRAIL_COLORS.fadeRate * 0.5, // Slower fade
       ...options
     };
+    
+    // Grid dimensions in cells - width/height are in pixels, divide by cellSize
+    this.gridWidth = Math.ceil(width / this.options.cellSize);
+    this.gridHeight = Math.ceil(height / this.options.cellSize);
     
     // Trail data: 2D array of density values (0-maxValue)
     this.grid = this.createGrid(this.gridWidth, this.gridHeight);
@@ -102,8 +102,9 @@ export class TrailSystem {
    */
   deposit(x, y, amount = 1) {
     // Convert world coordinates to grid coordinates
-    const gridX = Math.floor(x / this.options.cellSize);
-    const gridY = Math.floor(y / this.options.cellSize);
+    // Grid is centered at (0,0), so we need to offset by half the grid size
+    const gridX = Math.floor(x / this.options.cellSize + this.gridWidth / 2);
+    const gridY = Math.floor(y / this.options.cellSize + this.gridHeight / 2);
     
     // Check bounds
     if (gridX < 0 || gridX >= this.gridWidth || gridY < 0 || gridY >= this.gridHeight) {
@@ -128,9 +129,9 @@ export class TrailSystem {
    * @returns {number} Trail density value (0-maxValue)
    */
   getValue(x, y) {
-    // Convert world coordinates to grid coordinates
-    const gridX = Math.floor(x / this.options.cellSize);
-    const gridY = Math.floor(y / this.options.cellSize);
+    // Convert world coordinates to grid coordinates with center offset
+    const gridX = Math.floor(x / this.options.cellSize + this.gridWidth / 2);
+    const gridY = Math.floor(y / this.options.cellSize + this.gridHeight / 2);
     
     // Check bounds
     if (gridX < 0 || gridX >= this.gridWidth || gridY < 0 || gridY >= this.gridHeight) {
@@ -150,9 +151,9 @@ export class TrailSystem {
     const cellSize = this.options.cellSize;
     const invCellSize = 1 / cellSize;
     
-    // Convert to grid coordinates (float)
-    const gridX = x * invCellSize;
-    const gridY = y * invCellSize;
+    // Convert to grid coordinates (float) with center offset
+    const gridX = x * invCellSize + this.gridWidth / 2;
+    const gridY = y * invCellSize + this.gridHeight / 2;
     
     // Get integer grid coordinates
     const x0 = Math.floor(gridX);
@@ -272,10 +273,11 @@ export class TrailSystem {
         const trailAlpha = normalized * alpha;
         
         // Draw rectangle for this cell
+        // Center the grid at (0,0) world coordinates
         this.trailGraphics.beginFill(color, trailAlpha);
         this.trailGraphics.drawRect(
-          x * cellSize - this.gridWidth * cellSize / 2,
-          y * cellSize - this.gridHeight * cellSize / 2,
+          x * cellSize - (this.gridWidth * cellSize) / 2,
+          y * cellSize - (this.gridHeight * cellSize) / 2,
           cellSize,
           cellSize
         );

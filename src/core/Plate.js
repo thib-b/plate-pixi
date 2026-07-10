@@ -27,16 +27,17 @@ export class Plate {
       y: 300,
       radius: 300,
       baseColor: 0xFFFFFF,
-      organismCount: 500,
+      organismCount: 300,
       organismType: 'slime',
-      organismSize: 8,
+      organismSize: 6,
       organismSpeed: 0.5,
       trailWeight: 1.0,
       decayRate: 0.01,
       sensorAngle: 45,
-      sensorDistance: 20,
+      sensorDistance: 30, // Increased for better trail detection
       depositAmount: 5,
       growthPattern: 'radial',
+      trailCellSize: 8, // Larger cells for more visible trails
       ...config
     };
     
@@ -50,8 +51,17 @@ export class Plate {
     this.plateVisual = this.createPlateVisual();
     this.container.addChild(this.plateVisual);
     
-    // Create trail system
-    this.trailSystem = new TrailSystem(this.config.radius * 2, this.config.radius * 2);
+    // Create trail system with larger cells for visible trails
+    // Use the plate's base color for trails
+    this.trailSystem = new TrailSystem(
+      this.config.radius * 2, 
+      this.config.radius * 2,
+      { 
+        cellSize: this.config.trailCellSize || 8,
+        color: this.config.baseColor,
+        alpha: 0.8
+      }
+    );
     this.container.addChild(this.trailSystem.getContainer());
     
     // Create organisms
@@ -107,32 +117,33 @@ export class Plate {
    * @returns {Organism} The new organism
    */
   addOrganism() {
-    // Random position within plate
+    // Grow from center: start organisms near the center (small radius)
+    // This creates organic growth patterns outward
     const angle = Math.random() * Math.PI * 2;
-    const radius = Math.random() * this.config.radius * 0.8;
-    const x = Math.cos(angle) * radius;
-    const y = Math.sin(angle) * radius;
+    const startRadius = this.config.radius * 0.1; // Start near center (10% of radius)
+    const x = Math.cos(angle) * startRadius;
+    const y = Math.sin(angle) * startRadius;
     
     const organismConfig = {
       size: this.config.organismSize,
-      speed: this.config.organismSpeed,
+      speed: this.config.organismSpeed * 0.2, // Much slower for growth patterns
       sensorAngle: this.config.sensorAngle,
-      sensorDistance: this.config.sensorDistance,
-      trailWeight: this.config.trailWeight,
+      sensorDistance: this.config.sensorDistance * 1.5, // Longer sensors for better trail detection
+      trailWeight: this.config.trailWeight * 3, // Heavier trails for stronger reinforcement
       color: this.config.baseColor,
-      organismType: this.config.organismType
+      organismType: this.config.organismType,
+      // Growth-specific parameters
+      growthMode: true
     };
     
     // Pass plate center position (0,0 in plate local coordinates)
-    // The organism will use this for boundary checking
     const organism = new Organism(
       organismConfig,
       x, y,
       0, 0  // Plate center is at (0,0) in plate local coordinates
     );
     
-    // Position relative to plate container (which is at this.config.x, this.config.y)
-    // The organism's x,y are already relative to plate center
+    // Position relative to plate container
     organism.x = x;
     organism.y = y;
     

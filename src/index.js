@@ -42,13 +42,17 @@ class PlateApp {
     // Set up event listeners
     this.setupEvents();
     
-    // Start with one plate
+    // Start with one plate - random color
+    const foodDyeColors = Object.values(FOOD_DYE_COLORS);
+    const randomColor = foodDyeColors[Math.floor(Math.random() * foodDyeColors.length)];
+    
     this.plateManager.addPlate({
       x: this.config.width / 2,
       y: this.config.height / 2,
       radius: 300,
-      baseColor: FOOD_DYE_COLORS.red,
-      organismCount: 500
+      baseColor: randomColor,
+      organismCount: 300,
+      organismSize: 6
     });
     
     // Log initialization
