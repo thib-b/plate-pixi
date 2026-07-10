@@ -8,6 +8,7 @@
 import * as PIXI from 'pixi.js';
 import { PlateManager } from './core/PlateManager.js';
 import { FOOD_DYE_COLORS } from './config/colors.js';
+import { generateRandomPalette } from './utils/colorPalette.js';
 
 // Global references for debug access
 window.plateManager = null;
@@ -42,16 +43,16 @@ class PlateApp {
     // Set up event listeners
     this.setupEvents();
     
-    // Start with one plate - random color
-    const foodDyeColors = Object.values(FOOD_DYE_COLORS);
-    const randomColor = foodDyeColors[Math.floor(Math.random() * foodDyeColors.length)];
+    // Start with one plate - random color palette
+    const palette = generateRandomPalette(8);
     
     this.plateManager.addPlate({
       x: this.config.width / 2,
       y: this.config.height / 2,
       radius: 300,
-      baseColor: randomColor,
-      organismCount: 0 // Dynamic spawning only
+      baseColor: palette.baseColor,
+      organismCount: 0, // Dynamic spawning only
+      palette: palette.colors // Pass palette for organism colors
     });
     
     // Log initialization
@@ -151,12 +152,14 @@ class PlateApp {
     
     // Press 'p' to add a plate
     if (event.key === 'p') {
+      const palette = generateRandomPalette(8);
       this.plateManager.addPlate({
         x: Math.random() * this.config.width,
         y: Math.random() * this.config.height,
         radius: 200,
-        baseColor: FOOD_DYE_COLORS[Object.keys(FOOD_DYE_COLORS)[Math.floor(Math.random() * Object.keys(FOOD_DYE_COLORS).length)]],
-        organismCount: 200
+        baseColor: palette.baseColor,
+        organismCount: 0,
+        palette: palette.colors
       });
     }
     
