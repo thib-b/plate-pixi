@@ -71,7 +71,7 @@ export class TrailSystem {
     for (let x = 0; x < width; x++) {
       grid[x] = [];
       for (let y = 0; y < height; y++) {
-        grid[x][y] = 0;
+        grid[x][y] = { value: 0, color: this.options.color };
       }
     }
     return grid;
@@ -100,7 +100,7 @@ export class TrailSystem {
    * @param {number} y - Y position (in world coordinates)
    * @param {number} amount - Amount to deposit (default 1)
    */
-  deposit(x, y, amount = 1) {
+  deposit(x, y, amount = 1, color = null) {
     // Convert world coordinates to grid coordinates
     // Grid is centered at (0,0), so we need to offset by half the grid size
     const gridX = Math.floor(x / this.options.cellSize + this.gridWidth / 2);
@@ -111,12 +111,19 @@ export class TrailSystem {
       return;
     }
     
+    const cell = this.grid[gridX][gridY];
+    
     // Add to the grid, clamping to max value
-    this.grid[gridX][gridY] = clamp(
-      this.grid[gridX][gridY] + amount,
+    cell.value = clamp(
+      cell.value + amount,
       0,
       this.options.maxValue
     );
+    
+    // Update color if provided (for per-organism colored trails)
+    if (color !== null && color !== undefined) {
+      cell.color = color;
+    }
     
     // Mark that we need to update rendering
     this.needsRender = true;
@@ -138,7 +145,7 @@ export class TrailSystem {
       return 0;
     }
     
-    return this.grid[gridX][gridY];
+    return this.grid[gridX][gridY].value;
   }
   
   /**
@@ -187,7 +194,7 @@ export class TrailSystem {
     if (gridX < 0 || gridX >= this.gridWidth || gridY < 0 || gridY >= this.gridHeight) {
       return 0;
     }
-    return this.grid[gridX][gridY];
+    return this.grid[gridX][gridY].value;
   }
   
   /**
@@ -224,7 +231,9 @@ export class TrailSystem {
     // Apply decay to all cells
     for (let x = 0; x < this.gridWidth; x++) {
       for (let y = 0; y < this.gridHeight; y++) {
-        this.grid[x][y] = Math.max(0, this.grid[x][y] - rate * delta * 60);
+        const cell = this.grid[x][y];
+        cell.value = Math.max(0, cell.value - rate * delta * 60);
+        // Note: We don't decay the color, just the value
       }
     }
     
@@ -238,7 +247,7 @@ export class TrailSystem {
   clear() {
     for (let x = 0; x < this.gridWidth; x++) {
       for (let y = 0; y < this.gridHeight; y++) {
-        this.grid[x][y] = 0;
+        this.grid[x][y] = { value: 0, color: this.options.color };
       }
     }
     this.needsRender = true;
@@ -263,18 +272,18 @@ export class TrailSystem {
     
     for (let x = 0; x < this.gridWidth; x++) {
       for (let y = 0; y < this.gridHeight; y++) {
-        const value = this.grid[x][y];
-        if (value === 0) continue;
+        const cellData = this.grid[x][y];
+        if (cellData.value === 0) continue;
         
         // Calculate normalized value (0-1)
-        const normalized = value / maxValue;
+        const normalized = cellData.value / maxValue;
         
         // Calculate alpha based on value
         const trailAlpha = normalized * alpha;
         
-        // Draw rectangle for this cell
+        // Draw rectangle for this cell with its color
         // Center the grid at (0,0) world coordinates
-        this.trailGraphics.beginFill(color, trailAlpha);
+        this.trailGraphics.beginFill(cellData.color, trailAlpha);
         this.trailGraphics.drawRect(
           x * cellSize - (this.gridWidth * cellSize) / 2,
           y * cellSize - (this.gridHeight * cellSize) / 2,

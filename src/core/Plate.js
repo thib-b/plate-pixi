@@ -8,7 +8,7 @@
 import * as PIXI from 'pixi.js';
 import { Organism } from './Organism.js';
 import { TrailSystem } from './TrailSystem.js';
-import { AGAR_COLORS } from '../config/colors.js';
+import { AGAR_COLORS, FOOD_DYE_COLORS } from '../config/colors.js';
 import { randomInRange } from '../utils/random.js';
 
 /**
@@ -89,13 +89,20 @@ export class Plate {
   createPlateVisual() {
     const g = new PIXI.Graphics();
     
-    // Draw the agar base (semi-transparent white)
-    g.beginFill(AGAR_COLORS.base, AGAR_COLORS.baseAlpha);
+    // Draw the plate edge - light grey ring representing the physical plate
+    // Slightly larger than the agar to show the plate edge
+    const plateEdgeRadius = this.config.radius * 1.05;
+    g.beginFill(0xE0E0E0, 0.3); // Light grey with slight transparency
+    g.drawCircle(0, 0, plateEdgeRadius);
+    g.endFill();
+    
+    // Draw the agar base with plate color (semi-transparent) on top of the plate edge
+    // This tint matches the general color theme of the organisms
+    g.beginFill(this.config.baseColor, AGAR_COLORS.baseAlpha);
     g.drawCircle(0, 0, this.config.radius);
     g.endFill();
     
-    // Draw border - use a slightly smaller circle for the outline
-    // This ensures the border is visible on top of the fill
+    // Draw border on top - dark outline at the agar edge
     g.lineStyle(AGAR_COLORS.borderWidth, AGAR_COLORS.border, AGAR_COLORS.borderAlpha);
     g.drawCircle(0, 0, this.config.radius);
     
@@ -107,8 +114,14 @@ export class Plate {
    * @param {number} count - Number of organisms to create
    */
   createOrganisms(count) {
-    for (let i = 0; i < count; i++) {
-      this.addOrganism();
+    // Distribute organisms across 3 seed points with different colors
+    const seedCount = 3;
+    const organismsPerSeed = Math.ceil(count / seedCount);
+    
+    for (let seedIndex = 0; seedIndex < seedCount; seedIndex++) {
+      for (let i = 0; i < organismsPerSeed; i++) {
+        this.addOrganism(seedIndex);
+      }
     }
   }
   
@@ -116,13 +129,22 @@ export class Plate {
    * Add a single organism to the plate
    * @returns {Organism} The new organism
    */
-  addOrganism() {
-    // Grow from center: start organisms near the center (small radius)
-    // This creates organic growth patterns outward
-    const angle = Math.random() * Math.PI * 2;
+  addOrganism(seedIndex = 0) {
+    // Multi-seed growth: 3 starting points at 120° intervals
+    const seedAngle = (seedIndex / 3) * Math.PI * 2; // 0°, 120°, 240°
     const startRadius = this.config.radius * 0.1; // Start near center (10% of radius)
-    const x = Math.cos(angle) * startRadius;
-    const y = Math.sin(angle) * startRadius;
+    const centerX = Math.cos(seedAngle) * startRadius;
+    const centerY = Math.sin(seedAngle) * startRadius;
+    
+    // Random position near this seed point
+    const angle = Math.random() * Math.PI * 2;
+    const offsetRadius = startRadius * 0.3; // Small cluster around seed
+    const x = centerX + Math.cos(angle) * offsetRadius;
+    const y = centerY + Math.sin(angle) * offsetRadius;
+    
+    // Each seed has its own color from the food dye palette
+    const foodDyeColors = Object.values(FOOD_DYE_COLORS);
+    const seedColor = foodDyeColors[seedIndex % foodDyeColors.length];
     
     const organismConfig = {
       size: this.config.organismSize,
@@ -130,10 +152,11 @@ export class Plate {
       sensorAngle: this.config.sensorAngle,
       sensorDistance: this.config.sensorDistance * 1.5, // Longer sensors for better trail detection
       trailWeight: this.config.trailWeight * 3, // Heavier trails for stronger reinforcement
-      color: this.config.baseColor,
+      color: seedColor, // Each seed has its own color
       organismType: this.config.organismType,
       // Growth-specific parameters
-      growthMode: true
+      growthMode: true,
+      seedIndex: seedIndex
     };
     
     // Pass plate center position (0,0 in plate local coordinates)
@@ -171,8 +194,14 @@ export class Plate {
    * @param {number} count - Number to add
    */
   addOrganisms(count) {
-    for (let i = 0; i < count; i++) {
-      this.addOrganism();
+    // Distribute new organisms across 3 seed points
+    const seedCount = 3;
+    const organismsPerSeed = Math.ceil(count / seedCount);
+    
+    for (let seedIndex = 0; seedIndex < seedCount; seedIndex++) {
+      for (let i = 0; i < organismsPerSeed; i++) {
+        this.addOrganism(seedIndex);
+      }
     }
   }
   
@@ -209,12 +238,13 @@ export class Plate {
         this.trailSystem
       );
       
-      // Deposit trail
+      // Deposit trail with organism's color
       const deposit = organism.getTrailDeposit();
       this.trailSystem.deposit(
         organism.x,
         organism.y,
-        deposit
+        deposit,
+        organism.config.color  // Pass organism's color for colored trails
       );
     });
     
