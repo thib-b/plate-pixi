@@ -29,7 +29,7 @@ export class Plate {
       baseColor: 0xFFFFFF,
       organismCount: 300,
       organismType: 'slime',
-      organismSize: 12,
+      organismSize: 3,
       organismSpeed: 0.5,
       trailWeight: 1.0,
       decayRate: 0,
@@ -37,7 +37,7 @@ export class Plate {
       sensorDistance: 30, // Increased for better trail detection
       depositAmount: 5,
       growthPattern: 'radial',
-      trailCellSize: 16, // Larger cells for more visible trails
+      trailCellSize: 4, // Larger cells for more visible trails
       growthDuration: 600, // 10 minutes (600 seconds) for plate to stabilize
       ...config
     };
