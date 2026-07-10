@@ -29,7 +29,7 @@ export class Plate {
       baseColor: 0xFFFFFF,
       organismCount: 300,
       organismType: 'slime',
-      organismSize: 3,
+      organismSize: 1,
       organismSpeed: 0.5,
       trailWeight: 1.0,
       decayRate: 0,
