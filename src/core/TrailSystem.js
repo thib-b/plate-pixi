@@ -13,6 +13,33 @@ import { TRAIL_COLORS } from '../config/colors.js';
 import { clamp, distanceSquared } from '../utils/geometry.js';
 
 /**
+ * Blend two colors together
+ * @param {number} color1 - First color (0xRRGGBB)
+ * @param {number} color2 - Second color (0xRRGGBB)
+ * @param {number} weight1 - Weight for color1 (0-1)
+ * @param {number} weight2 - Weight for color2 (0-1)
+ * @returns {number} Blended color (0xRRGGBB)
+ */
+function blendColors(color1, color2, weight1, weight2) {
+  // Extract RGB components
+  const r1 = (color1 >> 16) & 0xFF;
+  const g1 = (color1 >> 8) & 0xFF;
+  const b1 = color1 & 0xFF;
+  
+  const r2 = (color2 >> 16) & 0xFF;
+  const g2 = (color2 >> 8) & 0xFF;
+  const b2 = color2 & 0xFF;
+  
+  // Blend each channel
+  const r = Math.round(r1 * weight1 + r2 * weight2);
+  const g = Math.round(g1 * weight1 + g2 * weight2);
+  const b = Math.round(b1 * weight1 + b2 * weight2);
+  
+  // Combine back to hex
+  return (r << 16) | (g << 8) | b;
+}
+
+/**
  * TrailSystem class - manages trail data and rendering
  */
 export class TrailSystem {
@@ -121,8 +148,19 @@ export class TrailSystem {
     );
     
     // Update color if provided (for per-organism colored trails)
+    // Blend with existing color to create gradients
     if (color !== null && color !== undefined) {
-      cell.color = color;
+      if (cell.value <= amount) {
+        // First deposit or small addition - use new color
+        cell.color = color;
+      } else {
+        // Blend existing color with new color based on relative contribution
+        // More deposits of same color = that color dominates
+        // Mix of colors = blend
+        const existingWeight = (cell.value - amount) / cell.value;
+        const newWeight = amount / cell.value;
+        cell.color = blendColors(cell.color, color, existingWeight, newWeight);
+      }
     }
     
     // Mark that we need to update rendering
