@@ -94,10 +94,14 @@ class PlateApp {
       }
     }
     
-    // Update bottom FPS display (minimal)
+    // Update bottom FPS and alive display (minimal)
     const fpsBottomEl = document.getElementById('fps-bottom-value');
     if (fpsBottomEl) {
       fpsBottomEl.textContent = fps;
+    }
+    const aliveBottomEl = document.getElementById('alive-bottom-value');
+    if (aliveBottomEl) {
+      aliveBottomEl.textContent = aliveCount;
     }
     
     // Keep old stats for compatibility (hidden via CSS)
