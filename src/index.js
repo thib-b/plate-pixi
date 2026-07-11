@@ -94,6 +94,13 @@ class PlateApp {
       }
     }
     
+    // Update bottom FPS display (minimal)
+    const fpsBottomEl = document.getElementById('fps-bottom-value');
+    if (fpsBottomEl) {
+      fpsBottomEl.textContent = fps;
+    }
+    
+    // Keep old stats for compatibility (hidden via CSS)
     document.getElementById('fps').textContent = fps;
     document.getElementById('organism-count').textContent = organismCount;
     document.getElementById('alive-count').textContent = aliveCount;

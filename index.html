@@ -31,6 +31,25 @@
       max-height: 100%;
     }
     
+    /* Hide the main info panel */
+    #info {
+      display: none;
+    }
+    
+    /* Minimal FPS display at bottom */
+    #fps-bottom {
+      position: fixed;
+      bottom: 10px;
+      left: 10px;
+      color: #cccccc;
+      font-size: 12px;
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 5px 10px;
+      border-radius: 4px;
+      z-index: 100;
+    }
+    
     /* Info overlay */
     #info {
       position: absolute;
@@ -166,5 +185,6 @@
       }
     }
   </script>
+  <div id="fps-bottom">FPS: <span id="fps-bottom-value">0</span></div>
 </body>
 </html>
