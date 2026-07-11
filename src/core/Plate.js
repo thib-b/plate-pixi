@@ -37,7 +37,7 @@ export class Plate {
       sensorDistance: 30, // Increased for better trail detection
       depositAmount: 5,
       growthPattern: 'radial',
-      trailCellSize: 1, // Finer trail cells (4x smaller than before)
+      trailCellSize: 2, // Trail cell size (balanced between detail and performance)
       growthDuration: 60, // 60 seconds for testing
       spawnBaseProbability: 0.01, // Base spawn probability per frame
       spawnTrailThreshold: 5, // Max trail value for spawning (find untrailed areas)
