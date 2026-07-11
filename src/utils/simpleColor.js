@@ -6,12 +6,15 @@
 /**
  * Convert HSL to hex color
  * @param {number} h - Hue (0-360)
- * @param {number} s - Saturation (0-1)
- * @param {number} l - Lightness (0-1)
+ * @param {number} s - Saturation (0-100)
+ * @param {number} l - Lightness (0-100)
  * @returns {number} Hex color (0xRRGGBB)
  */
 export function hslToHex(h, s, l) {
-  l /= 100;
+  // Convert percentages to 0-1 range
+  s = s / 100;
+  l = l / 100;
+  
   const a = s * Math.min(l, 1 - l);
   const f = n => {
     const k = (n + h / 30) % 12;
