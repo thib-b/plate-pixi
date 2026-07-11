@@ -46,10 +46,14 @@ class PlateApp {
     // Start with one plate - random color palette
     const palette = generateRandomPalette(8);
     
+    // Calculate responsive radius based on screen size
+    // Use 40% of the smaller dimension (fits well on mobile)
+    const radius = Math.min(this.config.width, this.config.height) * 0.4;
+    
     this.plateManager.addPlate({
       x: this.config.width / 2,
       y: this.config.height / 2,
-      radius: 300,
+      radius: radius,
       baseColor: palette.baseColor,
       organismCount: 0, // Dynamic spawning only
       palette: palette.colors // Pass palette for organism colors
