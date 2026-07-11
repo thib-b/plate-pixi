@@ -9,7 +9,6 @@ import * as PIXI from 'pixi.js';
 import { PlateManager } from './core/PlateManager.js';
 import { FOOD_DYE_COLORS } from './config/colors.js';
 import { generateRandomPalette } from './utils/simpleColor.js';
-import { generateRandomPalette } from './utils/simpleColor.js';
 
 // Global references for debug access
 window.plateManager = null;
