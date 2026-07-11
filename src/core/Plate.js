@@ -395,10 +395,8 @@ export class Plate {
    * Update plate visual based on growth progress
    */
   updatePlateVisual() {
-    // Could change color, opacity, etc. based on growth
-    // For now, just a simple pulse effect
-    const pulse = Math.sin(this.age * 2) * 0.05 + 0.95;
-    this.plateVisual.alpha = AGAR_COLORS.baseAlpha * pulse;
+    // Set constant alpha - no pulsing effect
+    this.plateVisual.alpha = AGAR_COLORS.baseAlpha;
   }
   
   /**
