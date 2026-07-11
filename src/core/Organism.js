@@ -335,11 +335,21 @@ export class Organism {
     
     // Simple decision logic with high randomness:
     const { left, center, right } = this.sensors;
+    const maxSensorValue = this.trailSystem.options.maxValue;
     
     const currentAngle = Math.atan2(this.vy, this.vx);
     
     // Trail following with lower thresholds for more exploration
-    if (center > left * 1.05 && center > right * 1.05) {
+    // But avoid areas with very high trail density (already well-traveled)
+    const centerTrailValue = center * maxSensorValue; // Denormalize to actual value
+    const avoidThreshold = maxSensorValue * 0.8; // Avoid areas above 80% of max
+    
+    if (centerTrailValue > avoidThreshold) {
+      // High trail density ahead - turn away to explore untraveled areas
+      const turnAmount = degreesToRadians(45 + Math.random() * 90); // 45-135 degree turn
+      this.vx = Math.cos(currentAngle + turnAmount) * effectiveSpeed;
+      this.vy = Math.sin(currentAngle + turnAmount) * effectiveSpeed;
+    } else if (center > left * 1.05 && center > right * 1.05) {
       // Trail ahead - continue straight with slight forward boost and small random variation
       const randomVariation = degreesToRadians((Math.random() - 0.5) * 20);
       this.vx = Math.cos(currentAngle + randomVariation) * effectiveSpeed * 1.05;
