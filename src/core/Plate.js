@@ -567,7 +567,7 @@ export class Plate {
   }
 
   /**
-   * Load background image and set plate color to median color
+   * Load background image and set plate color to 70% darkest + 30% median
    */
   async loadBackgroundImageAndSetColor() {
     try {
@@ -583,11 +583,15 @@ export class Plate {
       
       this.backgroundImage = img;
       
-      // Get median color from the image
+      // Get both median and darkest colors
       const medianColor = this.getMedianColorFromImage(img);
+      const darkestColor = this.getDarkestColorFromImage(img);
       
-      // Update plate visual color with the median color
-      this.updatePlateColor(medianColor);
+      // Blend: 70% darkest, 30% median (closer to darkest)
+      const plateColor = this.blendColors(darkestColor, medianColor, 0.7, 0.3);
+      
+      // Update plate visual color
+      this.updatePlateColor(plateColor);
       
       // Load the background image into the trail system
       if (this.trailSystem) {
@@ -661,6 +665,47 @@ export class Plate {
     const averageColor = (avgR << 16) | (avgG << 8) | avgB;
     
     return { darkestColor, averageColor };
+  }
+
+  /**
+   * Find the darkest color of an image based on brightness
+   * @param {HTMLImageElement} img - The image to analyze
+   * @returns {number} The darkest color as 0xRRGGBB
+   */
+  getDarkestColorFromImage(img) {
+    // Create a canvas to sample the image
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    const sampleWidth = Math.min(img.width, 200);
+    const sampleHeight = Math.min(img.height, 200);
+    
+    canvas.width = sampleWidth;
+    canvas.height = sampleHeight;
+    
+    ctx.drawImage(img, 0, 0, sampleWidth, sampleHeight);
+    
+    const imageData = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
+    const data = imageData.data;
+    
+    let minBrightness = Infinity;
+    let darkestR = 0, darkestG = 0, darkestB = 0;
+    
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const brightness = r * 0.299 + g * 0.587 + b * 0.114;
+      
+      if (brightness < minBrightness) {
+        minBrightness = brightness;
+        darkestR = r;
+        darkestG = g;
+        darkestB = b;
+      }
+    }
+    
+    return (darkestR << 16) | (darkestG << 8) | darkestB;
   }
 
   /**
