@@ -661,7 +661,7 @@ export class Plate {
    * Load background image and set plate color to 70% darkest + 30% median
    */
   async loadBackgroundImageAndSetColor() {
-    console.log('Starting to load background image...');
+    console.log('Starting to load background image from:', this.backgroundImageUrl);
     try {
       // Load the image
       const img = new Image();
