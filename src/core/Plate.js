@@ -191,10 +191,10 @@ export class Plate {
     const y = centerY + Math.sin(angle) * offsetRadius;
     
     // Get background color from image at spawn position
-    let spawnColor = 0xFFFFFF; // Default white
+    let spawnColor = this.config.baseColor; // Fallback to plate color
     if (this.trailSystem && this.trailSystem.grid) {
       // Get color from the grid at this position
-      spawnColor = this.getGridColorAt(x, y) || 0xFFFFFF;
+      spawnColor = this.getGridColorAt(x, y) || this.config.baseColor;
     }
     
     const organismConfig = {
@@ -281,9 +281,9 @@ export class Plate {
           const spawnY = y + Math.sin(offsetAngle) * offsetDistance;
           
           // Get background color at spawn position from grid
-          let spawnColor = 0xFFFFFF;
+          let spawnColor = this.config.baseColor;
           if (this.trailSystem && this.trailSystem.grid) {
-            spawnColor = this.getGridColorAt(spawnX, spawnY) || 0xFFFFFF;
+            spawnColor = this.getGridColorAt(spawnX, spawnY) || this.config.baseColor;
           }
           
           const spawnConfig = {
@@ -315,8 +315,8 @@ export class Plate {
         
         // Track spawn site - use color of the center position
         const centerColor = this.trailSystem && this.trailSystem.grid
-          ? this.getGridColorAt(x, y) || 0xFFFFFF 
-          : 0xFFFFFF;
+          ? this.getGridColorAt(x, y) || this.config.baseColor 
+          : this.config.baseColor;
         this.spawnSites.push({ x, y, color: centerColor, count: spawnCount });
         
         return true;
@@ -398,11 +398,11 @@ export class Plate {
         this.trailSystem
       );
       
-      // Deposit trail with the cell's background color (only if alive)
-      if (organism.isAlive()) {
+      // Deposit trail with the cell's background color (only if alive AND image is loaded)
+      if (organism.isAlive() && this.backgroundImageLoaded) {
         const deposit = organism.getTrailDeposit();
         // Get the cell's color from the grid
-        const cellColor = this.getGridColorAt(organism.x, organism.y) || organism.config.color;
+        const cellColor = this.getGridColorAt(organism.x, organism.y) || this.config.baseColor;
         this.trailSystem.deposit(
           organism.x,
           organism.y,
