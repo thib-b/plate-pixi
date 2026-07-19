@@ -687,7 +687,7 @@ export class Plate {
       
       // Instead of loading image colors, manually set a test pattern
       // This bypasses any image loading issues
-      if (this.trailSystem) {
+      if (this.trailSystem && this.trailSystem.grid) {
         const grid = this.trailSystem.grid;
         const totalCells = grid.width * grid.height;
         
@@ -700,17 +700,30 @@ export class Plate {
           // Create 4 distinct colored quadrants
           let r, g, b;
           if (normX < 0.5 && normY < 0.5) {
-            r = 255; g = 0; b = 0;      // RED
+            r = 255; g = 0; b = 0;      // RED (0xFF0000)
           } else if (normX >= 0.5 && normY < 0.5) {
-            r = 0; g = 255; b = 0;      // GREEN
+            r = 0; g = 255; b = 0;      // GREEN (0x00FF00)
           } else if (normX < 0.5 && normY >= 0.5) {
-            r = 0; g = 0; b = 255;      // BLUE
+            r = 0; g = 0; b = 255;      // BLUE (0x0000FF)
           } else {
-            r = 255; g = 255; b = 0;    // YELLOW
+            r = 255; g = 255; b = 0;    // YELLOW (0xFFFF00)
           }
           grid.colors[i] = (r << 16) | (g << 8) | b;
         }
-        console.log('Test pattern applied to grid');
+        // Also force the center cell to be bright red for easy testing
+        const centerIndex = this.trailSystem.getIndex(
+          Math.floor(grid.width / 2),
+          Math.floor(grid.height / 2)
+        );
+        grid.colors[centerIndex] = 0xFF0000; // Bright red
+        
+        console.log('Test pattern applied to grid', {
+          topLeft: grid.colors[0].toString(16),
+          topRight: grid.colors[Math.floor(grid.width / 2)].toString(16),
+          center: grid.colors[centerIndex].toString(16),
+          gridWidth: grid.width,
+          gridHeight: grid.height
+        });
       }
       
       // Mark as loaded
