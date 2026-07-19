@@ -658,6 +658,7 @@ export class Plate {
    * Load background image and set plate color to 70% darkest + 30% median
    */
   async loadBackgroundImageAndSetColor() {
+    console.log('Starting to load background image...');
     try {
       // Load the image
       const img = new Image();
@@ -685,6 +686,7 @@ export class Plate {
       // Particles will deposit trails in colors from the image
       if (this.trailSystem) {
         this.trailSystem.loadImageColors(img);
+        console.log('Image loaded and colors extracted');
       }
       
       // Store the image reference and mark as loaded
@@ -693,6 +695,8 @@ export class Plate {
       
     } catch (error) {
       console.error('Failed to load background image:', error);
+      // Fallback: mark as loaded so spawning can proceed with default colors
+      this.backgroundImageLoaded = true;
     }
   }
 
