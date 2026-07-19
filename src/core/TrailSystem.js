@@ -111,7 +111,18 @@ export class TrailSystem {
     
     for (let i = 0; i < cellCount; i++) {
       values[i] = 0;
-      colors[i] = defaultColor;
+      // Create a test pattern: vary color based on position
+      // This will help us see if color-based movement is working
+      const y = Math.floor(i / width);
+      const x = i % width;
+      const normalizedX = x / width;
+      const normalizedY = y / height;
+      
+      // Create a gradient: red on left, green in middle, blue on right
+      const r = Math.floor(normalizedX * 255);
+      const g = Math.floor(normalizedY * 255);
+      const b = Math.floor((1 - normalizedX) * 255);
+      colors[i] = (r << 16) | (g << 8) | b;
     }
     
     return { values, colors, width, height };
