@@ -409,6 +409,9 @@ export class Plate {
           deposit,
           cellColor  // Pass the cell's background color from the image
         );
+        if (Math.random() < 0.01) { // Log 1% of deposits for debugging
+          console.log('Deposit:', {x: organism.x.toFixed(1), y: organism.y.toFixed(1), color: cellColor.toString(16), deposit});
+        }
       }
     });
     
@@ -716,6 +719,9 @@ export class Plate {
           Math.floor(grid.height / 2)
         );
         grid.colors[centerIndex] = 0xFF0000; // Bright red
+        
+        // Mark that rendering needs to be updated
+        this.trailSystem.needsRender = true;
         
         console.log('Test pattern applied to grid', {
           topLeft: grid.colors[0].toString(16),
