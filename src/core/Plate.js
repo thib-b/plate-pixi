@@ -70,6 +70,7 @@ export class Plate {
     
     // Background image support
     this.backgroundImage = null;
+    this.backgroundImageUrl = config.backgroundImageUrl || 'assets/plate1.png';
     
     // Create organisms
     this.organisms = [];
@@ -93,6 +94,9 @@ export class Plate {
     this.organisms.forEach(org => {
       this.container.addChild(org.getGraphics());
     });
+    
+    // Load background image automatically
+    this.loadBackgroundImageAndSetColor();
     
     // For debug access
     this.id = config.id || Math.floor(Math.random() * 10000);
@@ -548,6 +552,7 @@ export class Plate {
    */
   clearBackgroundImage() {
     this.backgroundImage = null;
+    this.backgroundImageUrl = null;
     if (this.trailSystem) {
       this.trailSystem.clearBackgroundImage();
     }
@@ -559,6 +564,109 @@ export class Plate {
    */
   hasBackgroundImage() {
     return this.backgroundImage !== null;
+  }
+
+  /**
+   * Load background image and set plate color to darkest color from image
+   */
+  async loadBackgroundImageAndSetColor() {
+    try {
+      // Load the image
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = this.backgroundImageUrl;
+      });
+      
+      this.backgroundImage = img;
+      
+      // Find the darkest color in the image
+      const darkestColor = this.getDarkestColorFromImage(img);
+      
+      // Update plate visual color with the darkest color
+      this.updatePlateColor(darkestColor);
+      
+      // Load the background image into the trail system
+      if (this.trailSystem) {
+        this.trailSystem.loadBackgroundImage(img);
+      }
+      
+    } catch (error) {
+      console.error('Failed to load background image:', error);
+    }
+  }
+
+  /**
+   * Analyze an image and find its darkest color
+   * @param {HTMLImageElement} img - The image to analyze
+   * @returns {number} The darkest color as 0xRRGGBB
+   */
+  getDarkestColorFromImage(img) {
+    // Create a canvas to sample the image
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Set canvas to a reasonable size for sampling
+    // We'll sample at a reduced resolution for performance
+    const sampleWidth = Math.min(img.width, 200);
+    const sampleHeight = Math.min(img.height, 200);
+    
+    canvas.width = sampleWidth;
+    canvas.height = sampleHeight;
+    
+    // Draw the image scaled down
+    ctx.drawImage(img, 0, 0, sampleWidth, sampleHeight);
+    
+    // Get image data
+    const imageData = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
+    const data = imageData.data;
+    
+    // Find the darkest pixel
+    let minBrightness = Infinity;
+    let darkestR = 0, darkestG = 0, darkestB = 0;
+    
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      
+      // Calculate brightness (perceived luminance)
+      const brightness = r * 0.299 + g * 0.587 + b * 0.114;
+      
+      if (brightness < minBrightness) {
+        minBrightness = brightness;
+        darkestR = r;
+        darkestG = g;
+        darkestB = b;
+      }
+    }
+    
+    // Convert to hex color
+    return (darkestR << 16) | (darkestG << 8) | darkestB;
+  }
+
+  /**
+   * Update the plate visual color
+   * @param {number} color - New color as 0xRRGGBB
+   */
+  updatePlateColor(color) {
+    this.config.baseColor = color;
+    
+    if (this.plateVisual) {
+      // Clear and redraw the plate visual with new color
+      this.container.removeChild(this.plateVisual);
+      this.plateVisual.destroy(true);
+      this.plateVisual = this.createPlateVisual();
+      this.container.addChildAt(this.plateVisual, 0); // Add behind trails
+    }
+    
+    // Update trail system default color
+    if (this.trailSystem) {
+      this.trailSystem.options.color = color;
+    }
   }
 
   /**
