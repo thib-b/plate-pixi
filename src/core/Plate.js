@@ -72,6 +72,7 @@ export class Plate {
     // Background image support
     this.backgroundImage = null;
     this.backgroundImageUrl = config.backgroundImageUrl || 'assets/plate1.png';
+    this.backgroundImageLoaded = false; // Flag to track if image is loaded
     
     // Create organisms
     this.organisms = [];
@@ -234,6 +235,11 @@ export class Plate {
    * @returns {boolean} True if spawn was successful
    */
   trySpawnNewOrganism() {
+    // Don't spawn until image is loaded
+    if (!this.backgroundImageLoaded) {
+      return false;
+    }
+    
     // Calculate current coverage
     this.calculateCoverage();
     
@@ -392,14 +398,16 @@ export class Plate {
         this.trailSystem
       );
       
-      // Deposit trail with organism's color (only if alive)
+      // Deposit trail with the cell's background color (only if alive)
       if (organism.isAlive()) {
         const deposit = organism.getTrailDeposit();
+        // Get the cell's color from the grid
+        const cellColor = this.getGridColorAt(organism.x, organism.y) || organism.config.color;
         this.trailSystem.deposit(
           organism.x,
           organism.y,
           deposit,
-          organism.config.color  // Pass organism's color for colored trails
+          cellColor  // Pass the cell's background color from the image
         );
       }
     });
@@ -679,8 +687,9 @@ export class Plate {
         this.trailSystem.loadImageColors(img);
       }
       
-      // Store the image reference
+      // Store the image reference and mark as loaded
       this.backgroundImage = img;
+      this.backgroundImageLoaded = true;
       
     } catch (error) {
       console.error('Failed to load background image:', error);
