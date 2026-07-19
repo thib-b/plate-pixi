@@ -70,6 +70,13 @@ export class TrailSystem {
     this.gridWidth = Math.ceil(width / this.options.cellSize);
     this.gridHeight = Math.ceil(height / this.options.cellSize);
     
+    // Pre-calculate constants for performance
+    this.invCellSize = 1 / this.options.cellSize;
+    this.offsetX = this.gridWidth / 2;
+    this.offsetY = this.gridHeight / 2;
+    this.renderOffsetX = (this.gridWidth * this.options.cellSize) / 2;
+    this.renderOffsetY = (this.gridHeight * this.options.cellSize) / 2;
+    
     // Trail data: 2D array of density values (0-maxValue)
     this.grid = this.createGrid(this.gridWidth, this.gridHeight);
     
@@ -128,10 +135,9 @@ export class TrailSystem {
    * @param {number} amount - Amount to deposit (default 1)
    */
   deposit(x, y, amount = 1, color = null) {
-    // Convert world coordinates to grid coordinates
-    // Grid is centered at (0,0), so we need to offset by half the grid size
-    const gridX = Math.floor(x / this.options.cellSize + this.gridWidth / 2);
-    const gridY = Math.floor(y / this.options.cellSize + this.gridHeight / 2);
+    // Convert world coordinates to grid coordinates using pre-calculated constants
+    const gridX = Math.floor(x * this.invCellSize + this.offsetX);
+    const gridY = Math.floor(y * this.invCellSize + this.offsetY);
     
     // Check bounds
     if (gridX < 0 || gridX >= this.gridWidth || gridY < 0 || gridY >= this.gridHeight) {
@@ -174,9 +180,9 @@ export class TrailSystem {
    * @returns {number} Trail density value (0-maxValue)
    */
   getValue(x, y) {
-    // Convert world coordinates to grid coordinates with center offset
-    const gridX = Math.floor(x / this.options.cellSize + this.gridWidth / 2);
-    const gridY = Math.floor(y / this.options.cellSize + this.gridHeight / 2);
+    // Convert world coordinates to grid coordinates using pre-calculated constants
+    const gridX = Math.floor(x * this.invCellSize + this.offsetX);
+    const gridY = Math.floor(y * this.invCellSize + this.offsetY);
     
     // Check bounds
     if (gridX < 0 || gridX >= this.gridWidth || gridY < 0 || gridY >= this.gridHeight) {
@@ -193,12 +199,9 @@ export class TrailSystem {
    * @returns {number} Interpolated trail density value
    */
   getValueInterpolated(x, y) {
-    const cellSize = this.options.cellSize;
-    const invCellSize = 1 / cellSize;
-    
-    // Convert to grid coordinates (float) with center offset
-    const gridX = x * invCellSize + this.gridWidth / 2;
-    const gridY = y * invCellSize + this.gridHeight / 2;
+    // Convert to grid coordinates (float) using pre-calculated constants
+    const gridX = x * this.invCellSize + this.offsetX;
+    const gridY = y * this.invCellSize + this.offsetY;
     
     // Get integer grid coordinates
     const x0 = Math.floor(gridX);
@@ -305,7 +308,6 @@ export class TrailSystem {
     // Render trails as a grid of rectangles
     const cellSize = this.options.cellSize;
     const maxValue = this.options.maxValue;
-    const color = this.options.color;
     const alpha = this.options.alpha;
     
     for (let x = 0; x < this.gridWidth; x++) {
@@ -320,11 +322,11 @@ export class TrailSystem {
         const trailAlpha = normalized * alpha;
         
         // Draw rectangle for this cell with its color
-        // Center the grid at (0,0) world coordinates
+        // Center the grid at (0,0) world coordinates using pre-calculated offsets
         this.trailGraphics.beginFill(cellData.color, trailAlpha);
         this.trailGraphics.drawRect(
-          x * cellSize - (this.gridWidth * cellSize) / 2,
-          y * cellSize - (this.gridHeight * cellSize) / 2,
+          x * cellSize - this.renderOffsetX,
+          y * cellSize - this.renderOffsetY,
           cellSize,
           cellSize
         );
@@ -399,6 +401,12 @@ export class TrailSystem {
     this.gridWidth = Math.ceil(width);
     this.gridHeight = Math.ceil(height);
     this.grid = this.createGrid(this.gridWidth, this.gridHeight);
+    // Re-calculate constants after resize
+    this.invCellSize = 1 / this.options.cellSize;
+    this.offsetX = this.gridWidth / 2;
+    this.offsetY = this.gridHeight / 2;
+    this.renderOffsetX = (this.gridWidth * this.options.cellSize) / 2;
+    this.renderOffsetY = (this.gridHeight * this.options.cellSize) / 2;
     this.needsRender = true;
   }
   
