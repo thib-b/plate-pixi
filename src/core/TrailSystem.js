@@ -271,6 +271,25 @@ export class TrailSystem {
     
     return this.grid.values[this.getIndex(gridX, gridY)];
   }
+
+  /**
+   * Get the background color at a given position (in background image mode)
+   * @param {number} x - X position (in world coordinates)
+   * @param {number} y - Y position (in world coordinates)
+   * @returns {number|null} Color as 0xRRGGBB, or null if out of bounds
+   */
+  getBackgroundColor(x, y) {
+    // Convert world coordinates to grid coordinates
+    const gridX = Math.floor(x * this.invCellSize + this.offsetX);
+    const gridY = Math.floor(y * this.invCellSize + this.offsetY);
+    
+    // Check bounds
+    if (gridX < 0 || gridX >= this.gridWidth || gridY < 0 || gridY >= this.gridHeight) {
+      return null;
+    }
+    
+    return this.grid.colors[this.getIndex(gridX, gridY)];
+  }
   
   /**
    * Get trail value with interpolation (smoother sampling)

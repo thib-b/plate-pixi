@@ -42,6 +42,7 @@ export class Plate {
       spawnBaseProbability: 0.01, // Base spawn probability per frame
       spawnTrailThreshold: 5, // Max trail value for spawning (find untrailed areas)
       palette: null, // Color palette for organisms (will be set by config)
+      colorSimilarityThreshold: 2000, // Squared RGB distance for similar colors
       ...config
     };
     
@@ -89,6 +90,10 @@ export class Plate {
     this.spawnSites = []; // Array of { x, y, color } for tracking spawn locations
     this.spawnAttempts = 0;
     this.maxSpawnAttemptsPerFrame = 10; // Limit attempts to find untrailed spot
+    
+    // Coverage tracking for color-based growth
+    this.targetCoverage = 0.8; // 80% coverage target
+    this.currentCoverage = 0;
     
     // Add organisms to container
     this.organisms.forEach(org => {
@@ -184,9 +189,11 @@ export class Plate {
     const x = centerX + Math.cos(angle) * offsetRadius;
     const y = centerY + Math.sin(angle) * offsetRadius;
     
-    // Each seed has its own color from the plate's palette
-    const palette = this.config.palette || [0xFFFFFF, 0xFF0000, 0x00FF00, 0x0000FF];
-    const seedColor = palette[seedIndex % palette.length];
+    // Get background color from image at spawn position
+    let spawnColor = 0xFFFFFF; // Default white
+    if (this.trailSystem && this.trailSystem.backgroundImageMode) {
+      spawnColor = this.trailSystem.getBackgroundColor(x, y) || 0xFFFFFF;
+    }
     
     const organismConfig = {
       size: this.config.organismSize,
@@ -194,8 +201,9 @@ export class Plate {
       sensorAngle: this.config.sensorAngle,
       sensorDistance: this.config.sensorDistance * 1.5, // Longer sensors for better trail detection
       trailWeight: this.config.trailWeight * 3, // Heavier trails for stronger reinforcement
-      color: seedColor, // Each seed has its own color
+      color: spawnColor, // Use background image color
       organismType: this.config.organismType,
+      colorSimilarityThreshold: this.config.colorSimilarityThreshold,
       // Individual lifespan - random within plate's growth duration
       lifespan: this.config.growthDuration * (0.5 + Math.random() * 0.5),
       // Growth-specific parameters
@@ -225,6 +233,14 @@ export class Plate {
    * @returns {boolean} True if spawn was successful
    */
   trySpawnNewOrganism() {
+    // Calculate current coverage
+    this.calculateCoverage();
+    
+    // Stop spawning if we've reached target coverage
+    if (this.hasReachedTargetCoverage()) {
+      return false;
+    }
+    
     // Calculate spawn probability based on growth progress
     // Probability decays as plate ages: higher early, lower later
     const spawnProbability = this.config.spawnBaseProbability * (1 - this.growthProgress);
@@ -246,24 +262,8 @@ export class Plate {
       const trailValue = this.trailSystem.getValueInterpolated(x, y);
       if (trailValue <= this.config.spawnTrailThreshold) {
         // Found a good spot - spawn a group of organisms (50-150)
-        // Use a new color from the plate's palette (cycle through palette colors)
-        const palette = this.config.palette || [0xFFFFFF, 0xFF0000, 0x00FF00, 0x0000FF];
-        const newColor = palette[this.spawnSites.length % palette.length];
+        // Get background color from image at spawn position
         const spawnCount = 50 + Math.floor(Math.random() * 101); // 50-150 organisms
-        
-        // Create organism config for spawn
-        const spawnConfig = {
-          size: this.config.organismSize,
-          speed: this.config.organismSpeed * 0.2,
-          sensorAngle: this.config.sensorAngle,
-          sensorDistance: this.config.sensorDistance * 1.5,
-          trailWeight: this.config.trailWeight * 3,
-          color: newColor,
-          organismType: this.config.organismType,
-          lifespan: this.config.growthDuration * (0.5 + Math.random() * 0.5),
-          growthMode: true,
-          seedIndex: this.spawnSites.length
-        };
         
         // Spawn multiple organisms at this location
         for (let i = 0; i < spawnCount; i++) {
@@ -272,6 +272,26 @@ export class Plate {
           const offsetDistance = Math.random() * this.config.radius * 0.05; // 5% of radius spread
           const spawnX = x + Math.cos(offsetAngle) * offsetDistance;
           const spawnY = y + Math.sin(offsetAngle) * offsetDistance;
+          
+          // Get background color at spawn position
+          let spawnColor = 0xFFFFFF;
+          if (this.trailSystem && this.trailSystem.backgroundImageMode) {
+            spawnColor = this.trailSystem.getBackgroundColor(spawnX, spawnY) || 0xFFFFFF;
+          }
+          
+          const spawnConfig = {
+            size: this.config.organismSize,
+            speed: this.config.organismSpeed * 0.2,
+            sensorAngle: this.config.sensorAngle,
+            sensorDistance: this.config.sensorDistance * 1.5,
+            trailWeight: this.config.trailWeight * 3,
+            color: spawnColor,
+            organismType: this.config.organismType,
+            colorSimilarityThreshold: this.config.colorSimilarityThreshold,
+            lifespan: this.config.growthDuration * (0.5 + Math.random() * 0.5),
+            growthMode: true,
+            seedIndex: this.spawnSites.length
+          };
           
           const organism = new Organism(
             spawnConfig,
@@ -286,8 +306,11 @@ export class Plate {
           this.container.addChild(organism.getGraphics());
         }
         
-        // Track spawn site
-        this.spawnSites.push({ x, y, color: newColor, count: spawnCount });
+        // Track spawn site - use color of the center position
+        const centerColor = this.trailSystem && this.trailSystem.backgroundImageMode 
+          ? this.trailSystem.getBackgroundColor(x, y) || 0xFFFFFF 
+          : 0xFFFFFF;
+        this.spawnSites.push({ x, y, color: centerColor, count: spawnCount });
         
         return true;
       }
@@ -504,6 +527,38 @@ export class Plate {
    */
   getAliveOrganismCount() {
     return this.organisms.filter(org => org.isAlive()).length;
+  }
+
+  /**
+   * Calculate current plate coverage (percentage of cells with trails)
+   * @returns {number} Coverage as 0-1
+   */
+  calculateCoverage() {
+    if (!this.trailSystem) return 0;
+    
+    const grid = this.trailSystem.grid;
+    const totalCells = grid.width * grid.height;
+    let coveredCells = 0;
+    
+    // Count cells with trail density above a small threshold
+    const threshold = this.trailSystem.options.maxValue * 0.01; // 1% of max
+    
+    for (let i = 0; i < totalCells; i++) {
+      if (grid.values[i] > threshold) {
+        coveredCells++;
+      }
+    }
+    
+    this.currentCoverage = coveredCells / totalCells;
+    return this.currentCoverage;
+  }
+
+  /**
+   * Check if plate has reached target coverage
+   * @returns {boolean}
+   */
+  hasReachedTargetCoverage() {
+    return this.currentCoverage >= this.targetCoverage;
   }
   
   /**

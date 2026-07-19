@@ -45,10 +45,14 @@ export class Organism {
     this.plateY = plateY;
     this.plateRadius = 300; // Will be set by plate
     
-    // State
-    this.size = this.config.size;
+    // Color from background image - will be set after construction
     this.color = this.config.color;
     this.organismType = this.config.organismType;
+    this.sourceColor = null; // Color of the cell this organism spawned from
+    
+    // Color-based movement
+    this.colorSimilarityThreshold = this.config.colorSimilarityThreshold || 2000;
+    this.currentCellColor = null; // Color of the cell the organism is currently in
     
     // Sensor values (for slime mold behavior)
     this.sensors = {
@@ -379,9 +383,40 @@ export class Organism {
       this.vy = (this.vy / currentSpeed) * effectiveSpeed * 2;
     }
     
-    // Apply velocity - REDUCED multiplier for slower, more organic growth
-    this.x += this.vx * delta * 5;
-    this.y += this.vy * delta * 5;
+    // Calculate target position
+    const targetX = this.x + this.vx * delta * 5;
+    const targetY = this.y + this.vy * delta * 5;
+    
+    // Check if movement is allowed based on color similarity
+    if (this.canMoveToPosition(targetX, targetY)) {
+      // Apply velocity - REDUCED multiplier for slower, more organic growth
+      this.x = targetX;
+      this.y = targetY;
+    } else {
+      // Movement not allowed - try a random direction
+      // Try up to 5 random directions
+      let foundValidDirection = false;
+      for (let i = 0; i < 5; i++) {
+        const randomAngle = Math.random() * Math.PI * 2;
+        const testX = this.x + Math.cos(randomAngle) * effectiveSpeed * delta * 5;
+        const testY = this.y + Math.sin(randomAngle) * effectiveSpeed * delta * 5;
+        
+        if (this.canMoveToPosition(testX, testY)) {
+          this.x = testX;
+          this.y = testY;
+          this.vx = Math.cos(randomAngle) * effectiveSpeed;
+          this.vy = Math.sin(randomAngle) * effectiveSpeed;
+          foundValidDirection = true;
+          break;
+        }
+      }
+      
+      // If no valid direction found, don't move
+      if (!foundValidDirection) {
+        this.vx = 0;
+        this.vy = 0;
+      }
+    }
   }
   
   /**
@@ -449,6 +484,98 @@ export class Organism {
     this.vy = randomInRange(-0.5, 0.5);
   }
   
+  /**
+   * Set the organism's color based on the background image cell it's on
+   * @param {number} color - The color from the background image (0xRRGGBB)
+   */
+  setSourceColor(color) {
+    this.sourceColor = color;
+    this.color = color;
+  }
+
+  /**
+   * Calculate color distance between two colors
+   * Uses CIE76 delta-E approximation for better perceptual matching
+   * @param {number} color1 - First color (0xRRGGBB)
+   * @param {number} color2 - Second color (0xRRGGBB)
+   * @returns {number} Color distance (lower = more similar)
+   */
+  colorDistance(color1, color2) {
+    // Extract RGB
+    const r1 = (color1 >> 16) & 0xFF;
+    const g1 = (color1 >> 8) & 0xFF;
+    const b1 = color1 & 0xFF;
+    
+    const r2 = (color2 >> 16) & 0xFF;
+    const g2 = (color2 >> 8) & 0xFF;
+    const b2 = color2 & 0xFF;
+    
+    // Simple RGB distance (faster, good enough for our purposes)
+    // Using squared distance to avoid sqrt calculation
+    const dr = r1 - r2;
+    const dg = g1 - g2;
+    const db = b1 - b2;
+    return dr * dr + dg * dg + db * db;
+  }
+
+  /**
+   * Check if two colors are similar (within threshold)
+   * @param {number} color1 - First color (0xRRGGBB)
+   * @param {number} color2 - Second color (0xRRGGBB)
+   * @param {number} threshold - Maximum squared distance for similarity (default: small value)
+   * @returns {boolean} True if colors are similar
+   */
+  colorsSimilar(color1, color2, threshold = 2000) {
+    return this.colorDistance(color1, color2) < threshold;
+  }
+
+  /**
+   * Get background color at current position
+   * @returns {number|null} Color as 0xRRGGBB or null
+   */
+  getCurrentCellColor() {
+    if (this.trailSystem && this.trailSystem.backgroundImageMode) {
+      return this.trailSystem.getBackgroundColor(this.x, this.y);
+    }
+    return null;
+  }
+
+  /**
+   * Get background color at a target position
+   * @param {number} x - Target x position
+   * @param {number} y - Target y position
+   * @returns {number|null} Color as 0xRRGGBB or null
+   */
+  getTargetCellColor(x, y) {
+    if (this.trailSystem && this.trailSystem.backgroundImageMode) {
+      return this.trailSystem.getBackgroundColor(x, y);
+    }
+    return null;
+  }
+
+  /**
+   * Check if movement to target position is allowed based on color similarity
+   * @param {number} targetX - Target x position
+   * @param {number} targetY - Target y position
+   * @returns {boolean} True if movement is allowed
+   */
+  canMoveToPosition(targetX, targetY) {
+    if (!this.trailSystem || !this.trailSystem.backgroundImageMode) {
+      return true; // No background image mode, allow any movement
+    }
+    
+    const currentColor = this.getCurrentCellColor();
+    const targetColor = this.getTargetCellColor(targetX, targetY);
+    
+    // If we can't get colors, allow movement
+    if (currentColor === null || targetColor === null) {
+      return true;
+    }
+    
+    // Check color similarity
+    return this.colorsSimilar(currentColor, targetColor, this.colorSimilarityThreshold);
+  }
+
   /**
    * Clean up
    */
