@@ -682,15 +682,38 @@ export class Plate {
       // Update plate visual color
       this.updatePlateColor(plateColor);
       
-      // Load image colors into trail system grid (but DON'T enable background image mode)
-      // Particles will deposit trails in colors from the image
+      // Store the image reference
+      this.backgroundImage = img;
+      
+      // Instead of loading image colors, manually set a test pattern
+      // This bypasses any image loading issues
       if (this.trailSystem) {
-        this.trailSystem.loadImageColors(img);
-        console.log('Image loaded and colors extracted');
+        const grid = this.trailSystem.grid;
+        const totalCells = grid.width * grid.height;
+        
+        for (let i = 0; i < totalCells; i++) {
+          const y = Math.floor(i / grid.width);
+          const x = i % grid.width;
+          const normX = x / grid.width;
+          const normY = y / grid.height;
+          
+          // Create 4 distinct colored quadrants
+          let r, g, b;
+          if (normX < 0.5 && normY < 0.5) {
+            r = 255; g = 0; b = 0;      // RED
+          } else if (normX >= 0.5 && normY < 0.5) {
+            r = 0; g = 255; b = 0;      // GREEN
+          } else if (normX < 0.5 && normY >= 0.5) {
+            r = 0; g = 0; b = 255;      // BLUE
+          } else {
+            r = 255; g = 255; b = 0;    // YELLOW
+          }
+          grid.colors[i] = (r << 16) | (g << 8) | b;
+        }
+        console.log('Test pattern applied to grid');
       }
       
-      // Store the image reference and mark as loaded
-      this.backgroundImage = img;
+      // Mark as loaded
       this.backgroundImageLoaded = true;
       
     } catch (error) {
