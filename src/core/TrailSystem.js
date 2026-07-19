@@ -118,6 +118,49 @@ export class TrailSystem {
   }
   
   /**
+   * Load image colors into grid without enabling background mode
+   * This allows organisms to deposit trails in colors from the image
+   * @param {HTMLImageElement|ImageData} imageData - Image to load
+   */
+  loadImageColors(imageData) {
+    // Create temporary canvas to process the image
+    const canvas = document.createElement('canvas');
+    canvas.width = this.gridWidth;
+    canvas.height = this.gridHeight;
+    const ctx = canvas.getContext('2d');
+    
+    // Draw the image scaled to fit the grid
+    if (imageData instanceof HTMLImageElement) {
+      ctx.drawImage(imageData, 0, 0, this.gridWidth, this.gridHeight);
+    } else if (imageData instanceof ImageData) {
+      ctx.putImageData(imageData, 0, 0);
+    } else {
+      console.error('Unsupported image format for loadImageColors');
+      return;
+    }
+    
+    // Extract pixel data
+    const imageDataObj = ctx.getImageData(0, 0, this.gridWidth, this.gridHeight);
+    const data = imageDataObj.data;
+    
+    // Store colors from image into grid
+    for (let i = 0; i < this.gridWidth * this.gridHeight; i++) {
+      const y = Math.floor(i / this.gridWidth);
+      const x = i - y * this.gridWidth;
+      const pixelIndex = (y * this.gridWidth + x) * 4;
+      
+      const r = data[pixelIndex];
+      const g = data[pixelIndex + 1];
+      const b = data[pixelIndex + 2];
+      
+      // Convert RGB (0-255) to hex color (0xRRGGBB)
+      this.grid.colors[i] = (r << 16) | (g << 8) | b;
+    }
+    
+    this.needsRender = true;
+  }
+
+  /**
    * Enable background image mode with a loaded image
    * In this mode, trails reveal the underlying image based on density
    * @param {HTMLImageElement|ImageData} imageData - Image to load

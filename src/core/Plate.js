@@ -191,8 +191,9 @@ export class Plate {
     
     // Get background color from image at spawn position
     let spawnColor = 0xFFFFFF; // Default white
-    if (this.trailSystem && this.trailSystem.backgroundImageMode) {
-      spawnColor = this.trailSystem.getBackgroundColor(x, y) || 0xFFFFFF;
+    if (this.trailSystem && this.trailSystem.grid) {
+      // Get color from the grid at this position
+      spawnColor = this.getGridColorAt(x, y) || 0xFFFFFF;
     }
     
     const organismConfig = {
@@ -273,10 +274,10 @@ export class Plate {
           const spawnX = x + Math.cos(offsetAngle) * offsetDistance;
           const spawnY = y + Math.sin(offsetAngle) * offsetDistance;
           
-          // Get background color at spawn position
+          // Get background color at spawn position from grid
           let spawnColor = 0xFFFFFF;
-          if (this.trailSystem && this.trailSystem.backgroundImageMode) {
-            spawnColor = this.trailSystem.getBackgroundColor(spawnX, spawnY) || 0xFFFFFF;
+          if (this.trailSystem && this.trailSystem.grid) {
+            spawnColor = this.getGridColorAt(spawnX, spawnY) || 0xFFFFFF;
           }
           
           const spawnConfig = {
@@ -307,8 +308,8 @@ export class Plate {
         }
         
         // Track spawn site - use color of the center position
-        const centerColor = this.trailSystem && this.trailSystem.backgroundImageMode 
-          ? this.trailSystem.getBackgroundColor(x, y) || 0xFFFFFF 
+        const centerColor = this.trailSystem && this.trailSystem.grid
+          ? this.getGridColorAt(x, y) || 0xFFFFFF 
           : 0xFFFFFF;
         this.spawnSites.push({ x, y, color: centerColor, count: spawnCount });
         
@@ -622,6 +623,30 @@ export class Plate {
   }
 
   /**
+   * Get color from trail system grid at world position
+   * @param {number} x - World x position
+   * @param {number} y - World y position
+   * @returns {number|null} Color as 0xRRGGBB or null if out of bounds
+   */
+  getGridColorAt(x, y) {
+    if (!this.trailSystem || !this.trailSystem.grid) {
+      return null;
+    }
+    
+    // Convert world coordinates to grid coordinates
+    const gridX = Math.floor(x * this.trailSystem.invCellSize + this.trailSystem.offsetX);
+    const gridY = Math.floor(y * this.trailSystem.invCellSize + this.trailSystem.offsetY);
+    
+    // Check bounds
+    if (gridX < 0 || gridX >= this.trailSystem.gridWidth || 
+        gridY < 0 || gridY >= this.trailSystem.gridHeight) {
+      return null;
+    }
+    
+    return this.trailSystem.grid.colors[this.trailSystem.getIndex(gridX, gridY)];
+  }
+
+  /**
    * Load background image and set plate color to 70% darkest + 30% median
    */
   async loadBackgroundImageAndSetColor() {
@@ -648,10 +673,14 @@ export class Plate {
       // Update plate visual color
       this.updatePlateColor(plateColor);
       
-      // Load the background image into the trail system
+      // Load image colors into trail system grid (but DON'T enable background image mode)
+      // Particles will deposit trails in colors from the image
       if (this.trailSystem) {
-        this.trailSystem.loadBackgroundImage(img);
+        this.trailSystem.loadImageColors(img);
       }
+      
+      // Store the image reference
+      this.backgroundImage = img;
       
     } catch (error) {
       console.error('Failed to load background image:', error);

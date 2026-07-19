@@ -392,6 +392,16 @@ export class Organism {
       // Apply velocity - REDUCED multiplier for slower, more organic growth
       this.x = targetX;
       this.y = targetY;
+      
+      // Update organism color to match the new cell's background color
+      if (this.trailSystem && this.trailSystem.grid) {
+        const gridX = Math.floor(this.x * this.trailSystem.invCellSize + this.trailSystem.offsetX);
+        const gridY = Math.floor(this.y * this.trailSystem.invCellSize + this.trailSystem.offsetY);
+        if (gridX >= 0 && gridX < this.trailSystem.gridWidth && 
+            gridY >= 0 && gridY < this.trailSystem.gridHeight) {
+          this.color = this.trailSystem.grid.colors[this.trailSystem.getIndex(gridX, gridY)];
+        }
+      }
     } else {
       // Movement not allowed - try a random direction
       // Try up to 5 random directions
@@ -406,6 +416,17 @@ export class Organism {
           this.y = testY;
           this.vx = Math.cos(randomAngle) * effectiveSpeed;
           this.vy = Math.sin(randomAngle) * effectiveSpeed;
+          
+          // Update organism color to match the new cell's background color
+          if (this.trailSystem && this.trailSystem.grid) {
+            const gridX = Math.floor(this.x * this.trailSystem.invCellSize + this.trailSystem.offsetX);
+            const gridY = Math.floor(this.y * this.trailSystem.invCellSize + this.trailSystem.offsetY);
+            if (gridX >= 0 && gridX < this.trailSystem.gridWidth && 
+                gridY >= 0 && gridY < this.trailSystem.gridHeight) {
+              this.color = this.trailSystem.grid.colors[this.trailSystem.getIndex(gridX, gridY)];
+            }
+          }
+          
           foundValidDirection = true;
           break;
         }
@@ -530,25 +551,35 @@ export class Organism {
   }
 
   /**
-   * Get background color at current position
+   * Get grid color at current position
    * @returns {number|null} Color as 0xRRGGBB or null
    */
   getCurrentCellColor() {
-    if (this.trailSystem && this.trailSystem.backgroundImageMode) {
-      return this.trailSystem.getBackgroundColor(this.x, this.y);
+    if (this.trailSystem && this.trailSystem.grid) {
+      const gridX = Math.floor(this.x * this.trailSystem.invCellSize + this.trailSystem.offsetX);
+      const gridY = Math.floor(this.y * this.trailSystem.invCellSize + this.trailSystem.offsetY);
+      if (gridX >= 0 && gridX < this.trailSystem.gridWidth && 
+          gridY >= 0 && gridY < this.trailSystem.gridHeight) {
+        return this.trailSystem.grid.colors[this.trailSystem.getIndex(gridX, gridY)];
+      }
     }
     return null;
   }
 
   /**
-   * Get background color at a target position
+   * Get grid color at a target position
    * @param {number} x - Target x position
    * @param {number} y - Target y position
    * @returns {number|null} Color as 0xRRGGBB or null
    */
   getTargetCellColor(x, y) {
-    if (this.trailSystem && this.trailSystem.backgroundImageMode) {
-      return this.trailSystem.getBackgroundColor(x, y);
+    if (this.trailSystem && this.trailSystem.grid) {
+      const gridX = Math.floor(x * this.trailSystem.invCellSize + this.trailSystem.offsetX);
+      const gridY = Math.floor(y * this.trailSystem.invCellSize + this.trailSystem.offsetY);
+      if (gridX >= 0 && gridX < this.trailSystem.gridWidth && 
+          gridY >= 0 && gridY < this.trailSystem.gridHeight) {
+        return this.trailSystem.grid.colors[this.trailSystem.getIndex(gridX, gridY)];
+      }
     }
     return null;
   }
@@ -560,8 +591,8 @@ export class Organism {
    * @returns {boolean} True if movement is allowed
    */
   canMoveToPosition(targetX, targetY) {
-    if (!this.trailSystem || !this.trailSystem.backgroundImageMode) {
-      return true; // No background image mode, allow any movement
+    if (!this.trailSystem || !this.trailSystem.grid) {
+      return true; // No grid, allow any movement
     }
     
     const currentColor = this.getCurrentCellColor();
