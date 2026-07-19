@@ -95,20 +95,23 @@ export class TrailSystem {
   }
   
   /**
-   * Create the initial trail grid
+   * Create the initial trail grid as flat typed arrays
    * @param {number} width - Grid width in cells
    * @param {number} height - Grid height in cells
-   * @returns {Array} 2D array initialized to 0
+   * @returns {Object} Object with values (Float32Array) and colors (Uint32Array)
    */
   createGrid(width, height) {
-    const grid = [];
-    for (let x = 0; x < width; x++) {
-      grid[x] = [];
-      for (let y = 0; y < height; y++) {
-        grid[x][y] = { value: 0, color: this.options.color };
-      }
+    const cellCount = width * height;
+    const values = new Float32Array(cellCount);
+    const colors = new Uint32Array(cellCount);
+    const defaultColor = this.options.color;
+    
+    for (let i = 0; i < cellCount; i++) {
+      values[i] = 0;
+      colors[i] = defaultColor;
     }
-    return grid;
+    
+    return { values, colors, width, height };
   }
   
   /**
@@ -144,28 +147,27 @@ export class TrailSystem {
       return;
     }
     
-    const cell = this.grid[gridX][gridY];
+    const index = this.getIndex(gridX, gridY);
+    const currentValue = this.grid.values[index];
+    const currentColor = this.grid.colors[index];
     
     // Add to the grid, clamping to max value
-    cell.value = clamp(
-      cell.value + amount,
-      0,
-      this.options.maxValue
-    );
+    const newValue = clamp(currentValue + amount, 0, this.options.maxValue);
+    this.grid.values[index] = newValue;
     
     // Update color if provided (for per-organism colored trails)
     // Blend with existing color to create gradients
     if (color !== null && color !== undefined) {
-      if (cell.value <= amount) {
+      if (currentValue <= amount) {
         // First deposit or small addition - use new color
-        cell.color = color;
+        this.grid.colors[index] = color;
       } else {
         // Blend existing color with new color based on relative contribution
         // More deposits of same color = that color dominates
         // Mix of colors = blend
-        const existingWeight = (cell.value - amount) / cell.value;
-        const newWeight = amount / cell.value;
-        cell.color = blendColors(cell.color, color, existingWeight, newWeight);
+        const existingWeight = (currentValue) / newValue;
+        const newWeight = amount / newValue;
+        this.grid.colors[index] = blendColors(currentColor, color, existingWeight, newWeight);
       }
     }
     
@@ -189,7 +191,7 @@ export class TrailSystem {
       return 0;
     }
     
-    return this.grid[gridX][gridY].value;
+    return this.grid.values[this.getIndex(gridX, gridY)];
   }
   
   /**
@@ -235,30 +237,34 @@ export class TrailSystem {
     if (gridX < 0 || gridX >= this.gridWidth || gridY < 0 || gridY >= this.gridHeight) {
       return 0;
     }
-    return this.grid[gridX][gridY].value;
+    return this.grid.values[this.getIndex(gridX, gridY)];
   }
   
   /**
+   * Convert grid coordinates to flat array index
+   * @param {number} gridX - Grid X coordinate
+   * @param {number} gridY - Grid Y coordinate
+   * @returns {number} Flat array index
+   */
+  getIndex(gridX, gridY) {
+    return gridY * this.gridWidth + gridX;
+  }
+
+  /**
    * Get the entire trail grid (for debugging/serialization)
-   * @returns {Array} 2D array of trail values
+   * @returns {Object} Grid object with values and colors arrays
    */
   getGrid() {
     return this.grid;
   }
   
   /**
-   * Get a copy of the trail grid as a flat array (for efficient processing)
-   * @returns {Float64Array} Flat array of trail values
+   * Get a copy of the trail grid values as a flat array
+   * @returns {Float32Array} Flat array of trail values
    */
   getFlatGrid() {
-    const flat = new Float64Array(this.gridWidth * this.gridHeight);
-    let i = 0;
-    for (let x = 0; x < this.gridWidth; x++) {
-      for (let y = 0; y < this.gridHeight; y++) {
-        flat[i++] = this.grid[x][y];
-      }
-    }
-    return flat;
+    // Return a copy of the values array
+    return new Float32Array(this.grid.values);
   }
   
   /**
@@ -268,14 +274,14 @@ export class TrailSystem {
    */
   update(delta, decayRate = null) {
     const rate = decayRate !== null ? decayRate : this.options.decayRate;
+    const decayAmount = rate * delta * 60;
     
-    // Apply decay to all cells
-    for (let x = 0; x < this.gridWidth; x++) {
-      for (let y = 0; y < this.gridHeight; y++) {
-        const cell = this.grid[x][y];
-        cell.value = Math.max(0, cell.value - rate * delta * 60);
-        // Note: We don't decay the color, just the value
-      }
+    if (decayAmount <= 0) return;
+    
+    // Apply decay to all cells using flat array
+    const totalCells = this.gridWidth * this.gridHeight;
+    for (let i = 0; i < totalCells; i++) {
+      this.grid.values[i] = Math.max(0, this.grid.values[i] - decayAmount);
     }
     
     // Mark for rendering update
@@ -286,10 +292,11 @@ export class TrailSystem {
    * Clear all trails
    */
   clear() {
-    for (let x = 0; x < this.gridWidth; x++) {
-      for (let y = 0; y < this.gridHeight; y++) {
-        this.grid[x][y] = { value: 0, color: this.options.color };
-      }
+    const totalCells = this.gridWidth * this.gridHeight;
+    const defaultColor = this.options.color;
+    for (let i = 0; i < totalCells; i++) {
+      this.grid.values[i] = 0;
+      this.grid.colors[i] = defaultColor;
     }
     this.needsRender = true;
   }
@@ -310,28 +317,32 @@ export class TrailSystem {
     const maxValue = this.options.maxValue;
     const alpha = this.options.alpha;
     
-    for (let x = 0; x < this.gridWidth; x++) {
-      for (let y = 0; y < this.gridHeight; y++) {
-        const cellData = this.grid[x][y];
-        if (cellData.value === 0) continue;
-        
-        // Calculate normalized value (0-1)
-        const normalized = cellData.value / maxValue;
-        
-        // Calculate alpha based on value
-        const trailAlpha = normalized * alpha;
-        
-        // Draw rectangle for this cell with its color
-        // Center the grid at (0,0) world coordinates using pre-calculated offsets
-        this.trailGraphics.beginFill(cellData.color, trailAlpha);
-        this.trailGraphics.drawRect(
-          x * cellSize - this.renderOffsetX,
-          y * cellSize - this.renderOffsetY,
-          cellSize,
-          cellSize
-        );
-        this.trailGraphics.endFill();
-      }
+    const totalCells = this.gridWidth * this.gridHeight;
+    for (let i = 0; i < totalCells; i++) {
+      const value = this.grid.values[i];
+      if (value === 0) continue;
+      
+      // Calculate grid coordinates from flat index
+      const y = Math.floor(i / this.gridWidth);
+      const x = i - y * this.gridWidth;
+      const color = this.grid.colors[i];
+      
+      // Calculate normalized value (0-1)
+      const normalized = value / maxValue;
+      
+      // Calculate alpha based on value
+      const trailAlpha = normalized * alpha;
+      
+      // Draw rectangle for this cell with its color
+      // Center the grid at (0,0) world coordinates using pre-calculated offsets
+      this.trailGraphics.beginFill(color, trailAlpha);
+      this.trailGraphics.drawRect(
+        x * cellSize - this.renderOffsetX,
+        y * cellSize - this.renderOffsetY,
+        cellSize,
+        cellSize
+      );
+      this.trailGraphics.endFill();
     }
   }
   
@@ -364,7 +375,7 @@ export class TrailSystem {
     if (gridX < 0 || gridX >= this.gridWidth || gridY < 0 || gridY >= this.gridHeight) {
       return 0;
     }
-    return this.grid[gridX][gridY];
+    return this.grid.values[this.getIndex(gridX, gridY)];
   }
   
   /**
@@ -377,7 +388,7 @@ export class TrailSystem {
     if (gridX < 0 || gridX >= this.gridWidth || gridY < 0 || gridY >= this.gridHeight) {
       return;
     }
-    this.grid[gridX][gridY] = clamp(value, 0, this.options.maxValue);
+    this.grid.values[this.getIndex(gridX, gridY)] = clamp(value, 0, this.options.maxValue);
     this.needsRender = true;
   }
   
