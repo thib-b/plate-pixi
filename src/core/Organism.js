@@ -54,11 +54,6 @@ export class Organism {
     this.colorSimilarityThreshold = this.config.colorSimilarityThreshold || 2000;
     this.currentCellColor = null; // Color of the cell the organism is currently in
     
-    // Debug: check for NaN values
-    if (isNaN(this.config.size) || isNaN(this.config.trailWeight)) {
-      console.error('NaN in organism config!', this.config);
-    }
-    
     // Sensor values (for slime mold behavior)
     this.sensors = {
       left: 0,
