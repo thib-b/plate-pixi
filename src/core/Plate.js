@@ -68,6 +68,9 @@ export class Plate {
     );
     this.container.addChild(this.trailSystem.getContainer());
     
+    // Background image support
+    this.backgroundImage = null;
+    
     // Create organisms
     this.organisms = [];
     this.createOrganisms(this.config.organismCount);
@@ -515,6 +518,49 @@ export class Plate {
     return { ...this.config };
   }
   
+  /**
+   * Load a background image for this plate
+   * Trails will reveal this image based on density
+   * @param {HTMLImageElement|ImageData|string} image - Image element, ImageData, or URL
+   */
+  async loadBackgroundImage(image) {
+    if (typeof image === 'string') {
+      // Load from URL
+      const img = new Image();
+      img.crossOrigin = 'anonymous';
+      await new Promise((resolve, reject) => {
+        img.onload = resolve;
+        img.onerror = reject;
+        img.src = image;
+      });
+      this.backgroundImage = img;
+    } else {
+      this.backgroundImage = image;
+    }
+    
+    if (this.trailSystem) {
+      this.trailSystem.loadBackgroundImage(this.backgroundImage);
+    }
+  }
+
+  /**
+   * Clear the background image
+   */
+  clearBackgroundImage() {
+    this.backgroundImage = null;
+    if (this.trailSystem) {
+      this.trailSystem.clearBackgroundImage();
+    }
+  }
+
+  /**
+   * Check if background image mode is enabled
+   * @returns {boolean}
+   */
+  hasBackgroundImage() {
+    return this.backgroundImage !== null;
+  }
+
   /**
    * Clean up
    */

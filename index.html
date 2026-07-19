@@ -145,6 +145,8 @@
     <button onclick="clearPlates()">Clear All</button>
     <button onclick="addOrganisms(100)">+100 Organisms</button>
     <button onclick="removeOrganisms(100)">-100 Organisms</button>
+    <button onclick="loadBackgroundImage()">Load BG Image</button>
+    <button onclick="clearBackgroundImage()">Clear BG Image</button>
   </div>
   
   <script type="module" src="./src/index.js"></script>
@@ -182,6 +184,29 @@
         if (plate) {
           plate.removeOrganisms(count);
         }
+      }
+    }
+    
+    // Background image functions
+    async function loadBackgroundImage() {
+      if (window.plateManager && window.plateManager.plates.size > 0) {
+        const plate = window.plateManager.plates.values().next().value;
+        if (plate) {
+          // Use one of the test images from assets
+          try {
+            await window.plateManager.loadBackgroundImageOnFirstPlate('assets/1080113.jpg');
+            console.log('Background image loaded');
+          } catch (error) {
+            console.error('Failed to load background image:', error);
+          }
+        }
+      }
+    }
+    
+    function clearBackgroundImage() {
+      if (window.plateManager) {
+        window.plateManager.clearBackgroundImageOnFirstPlate();
+        console.log('Background image cleared');
       }
     }
   </script>

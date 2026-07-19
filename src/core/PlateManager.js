@@ -238,6 +238,25 @@ export class PlateManager {
       this.firstPlate.reset();
     }
   }
+
+  /**
+   * Load a background image on the first plate
+   * @param {HTMLImageElement|ImageData|string} image - Image to load
+   */
+  async loadBackgroundImageOnFirstPlate(image) {
+    if (this.firstPlate) {
+      await this.firstPlate.loadBackgroundImage(image);
+    }
+  }
+
+  /**
+   * Clear the background image on the first plate
+   */
+  clearBackgroundImageOnFirstPlate() {
+    if (this.firstPlate) {
+      this.firstPlate.clearBackgroundImage();
+    }
+  }
   
   /**
    * Reset all plates

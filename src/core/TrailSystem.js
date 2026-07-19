@@ -77,6 +77,9 @@ export class TrailSystem {
     this.renderOffsetX = (this.gridWidth * this.options.cellSize) / 2;
     this.renderOffsetY = (this.gridHeight * this.options.cellSize) / 2;
     
+    // Background image mode flag
+    this.backgroundImageMode = false;
+    
     // Trail data: 2D array of density values (0-maxValue)
     this.grid = this.createGrid(this.gridWidth, this.gridHeight);
     
@@ -112,6 +115,80 @@ export class TrailSystem {
     }
     
     return { values, colors, width, height };
+  }
+  
+  /**
+   * Enable background image mode with a loaded image
+   * In this mode, trails reveal the underlying image based on density
+   * @param {HTMLImageElement|ImageData} imageData - Image to load
+   */
+  loadBackgroundImage(imageData) {
+    // Create temporary canvas to process the image
+    const canvas = document.createElement('canvas');
+    canvas.width = this.gridWidth;
+    canvas.height = this.gridHeight;
+    const ctx = canvas.getContext('2d');
+    
+    // Draw the image scaled to fit the grid
+    if (imageData instanceof HTMLImageElement) {
+      ctx.drawImage(imageData, 0, 0, this.gridWidth, this.gridHeight);
+    } else if (imageData instanceof ImageData) {
+      ctx.putImageData(imageData, 0, 0);
+    } else {
+      console.error('Unsupported image format for loadBackgroundImage');
+      return;
+    }
+    
+    // Extract pixel data
+    const imageDataObj = ctx.getImageData(0, 0, this.gridWidth, this.gridHeight);
+    const data = imageDataObj.data;
+    
+    // Store colors from image into grid
+    for (let i = 0; i < this.gridWidth * this.gridHeight; i++) {
+      const y = Math.floor(i / this.gridWidth);
+      const x = i - y * this.gridWidth;
+      const pixelIndex = (y * this.gridWidth + x) * 4;
+      
+      const r = data[pixelIndex];
+      const g = data[pixelIndex + 1];
+      const b = data[pixelIndex + 2];
+      
+      // Convert RGB (0-255) to hex color (0xRRGGBB)
+      this.grid.colors[i] = (r << 16) | (g << 8) | b;
+    }
+    
+    // Clear trail values to start fresh
+    for (let i = 0; i < this.grid.values.length; i++) {
+      this.grid.values[i] = 0;
+    }
+    
+    // Enable background image mode
+    this.backgroundImageMode = true;
+    
+    this.needsRender = true;
+  }
+  
+  /**
+   * Clear the background image and return to normal trail rendering
+   */
+  clearBackgroundImage() {
+    // Reset to default color for all cells
+    const defaultColor = this.options.color;
+    const totalCells = this.gridWidth * this.gridHeight;
+    
+    for (let i = 0; i < totalCells; i++) {
+      this.grid.colors[i] = defaultColor;
+    }
+    
+    // Clear trail values
+    for (let i = 0; i < totalCells; i++) {
+      this.grid.values[i] = 0;
+    }
+    
+    // Disable background image mode
+    this.backgroundImageMode = false;
+    
+    this.needsRender = true;
   }
   
   /**
@@ -155,9 +232,10 @@ export class TrailSystem {
     const newValue = clamp(currentValue + amount, 0, this.options.maxValue);
     this.grid.values[index] = newValue;
     
-    // Update color if provided (for per-organism colored trails)
-    // Blend with existing color to create gradients
-    if (color !== null && color !== undefined) {
+    // Update color if provided and not in background image mode
+    // In background image mode, colors are fixed (the background image)
+    // and only the density (value) changes to reveal the image
+    if (!this.backgroundImageMode && color !== null && color !== undefined) {
       if (newValue <= amount) {
         // First deposit or small addition - use new color
         this.grid.colors[index] = color;
@@ -318,9 +396,12 @@ export class TrailSystem {
     const alpha = this.options.alpha;
     
     const totalCells = this.gridWidth * this.gridHeight;
+    
     for (let i = 0; i < totalCells; i++) {
       const value = this.grid.values[i];
-      if (value === 0) continue;
+      
+      // Skip empty cells in normal mode
+      if (!this.backgroundImageMode && value === 0) continue;
       
       // Calculate grid coordinates from flat index
       const y = Math.floor(i / this.gridWidth);
@@ -330,7 +411,8 @@ export class TrailSystem {
       // Calculate normalized value (0-1)
       const normalized = value / maxValue;
       
-      // Calculate alpha based on value
+      // In background image mode: use background color with alpha based on trail density
+      // Higher trail density = more opaque = background more visible
       const trailAlpha = normalized * alpha;
       
       // Draw rectangle for this cell with its color
