@@ -567,7 +567,7 @@ export class Plate {
   }
 
   /**
-   * Load background image and set plate color to darkest color from image
+   * Load background image and set plate color to midpoint between darkest and average
    */
   async loadBackgroundImageAndSetColor() {
     try {
@@ -583,11 +583,14 @@ export class Plate {
       
       this.backgroundImage = img;
       
-      // Find the darkest color in the image
-      const darkestColor = this.getDarkestColorFromImage(img);
+      // Get both darkest and average colors
+      const { darkestColor, averageColor } = this.getDarkestAndAverageColorFromImage(img);
       
-      // Update plate visual color with the darkest color
-      this.updatePlateColor(darkestColor);
+      // Calculate midpoint color
+      const midpointColor = this.blendColors(darkestColor, averageColor, 0.5, 0.5);
+      
+      // Update plate visual color with the midpoint color
+      this.updatePlateColor(midpointColor);
       
       // Load the background image into the trail system
       if (this.trailSystem) {
@@ -600,17 +603,16 @@ export class Plate {
   }
 
   /**
-   * Analyze an image and find its darkest color
+   * Analyze an image and find both its darkest and average colors
    * @param {HTMLImageElement} img - The image to analyze
-   * @returns {number} The darkest color as 0xRRGGBB
+   * @returns {Object} Object with darkestColor and averageColor as 0xRRGGBB
    */
-  getDarkestColorFromImage(img) {
+  getDarkestAndAverageColorFromImage(img) {
     // Create a canvas to sample the image
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d');
     
     // Set canvas to a reasonable size for sampling
-    // We'll sample at a reduced resolution for performance
     const sampleWidth = Math.min(img.width, 200);
     const sampleHeight = Math.min(img.height, 200);
     
@@ -624,14 +626,22 @@ export class Plate {
     const imageData = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
     const data = imageData.data;
     
-    // Find the darkest pixel
+    // Track darkest and accumulate for average
     let minBrightness = Infinity;
     let darkestR = 0, darkestG = 0, darkestB = 0;
+    let totalR = 0, totalG = 0, totalB = 0;
+    let pixelCount = 0;
     
     for (let i = 0; i < data.length; i += 4) {
       const r = data[i];
       const g = data[i + 1];
       const b = data[i + 2];
+      
+      // Accumulate for average
+      totalR += r;
+      totalG += g;
+      totalB += b;
+      pixelCount++;
       
       // Calculate brightness (perceived luminance)
       const brightness = r * 0.299 + g * 0.587 + b * 0.114;
@@ -644,8 +654,40 @@ export class Plate {
       }
     }
     
-    // Convert to hex color
-    return (darkestR << 16) | (darkestG << 8) | darkestB;
+    // Calculate average color
+    const avgR = Math.round(totalR / pixelCount);
+    const avgG = Math.round(totalG / pixelCount);
+    const avgB = Math.round(totalB / pixelCount);
+    
+    // Convert to hex colors
+    const darkestColor = (darkestR << 16) | (darkestG << 8) | darkestB;
+    const averageColor = (avgR << 16) | (avgG << 8) | avgB;
+    
+    return { darkestColor, averageColor };
+  }
+
+  /**
+   * Blend two colors together
+   * @param {number} color1 - First color (0xRRGGBB)
+   * @param {number} color2 - Second color (0xRRGGBB)
+   * @param {number} weight1 - Weight for color1 (0-1)
+   * @param {number} weight2 - Weight for color2 (0-1)
+   * @returns {number} Blended color (0xRRGGBB)
+   */
+  blendColors(color1, color2, weight1, weight2) {
+    const r1 = (color1 >> 16) & 0xFF;
+    const g1 = (color1 >> 8) & 0xFF;
+    const b1 = color1 & 0xFF;
+    
+    const r2 = (color2 >> 16) & 0xFF;
+    const g2 = (color2 >> 8) & 0xFF;
+    const b2 = color2 & 0xFF;
+    
+    const r = Math.round(r1 * weight1 + r2 * weight2);
+    const g = Math.round(g1 * weight1 + g2 * weight2);
+    const b = Math.round(b1 * weight1 + b2 * weight2);
+    
+    return (r << 16) | (g << 8) | b;
   }
 
   /**
