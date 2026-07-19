@@ -258,6 +258,11 @@ export class TrailSystem {
    * @param {number} amount - Amount to deposit (default 1)
    */
   deposit(x, y, amount = 1, color = null) {
+    // Sanitize amount to prevent NaN
+    if (isNaN(amount) || !isFinite(amount) || amount <= 0) {
+      return;
+    }
+    
     // Convert world coordinates to grid coordinates using pre-calculated constants
     const gridX = Math.floor(x * this.invCellSize + this.offsetX);
     const gridY = Math.floor(y * this.invCellSize + this.offsetY);
