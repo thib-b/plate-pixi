@@ -388,7 +388,8 @@ export class Organism {
     const targetY = this.y + this.vy * delta * 5;
     
     // Check if movement is allowed based on color similarity
-    if (this.canMoveToPosition(targetX, targetY)) {
+    // Allow a small chance (5%) to move to dissimilar colors to prevent getting stuck
+    if (this.canMoveToPosition(targetX, targetY) || Math.random() < 0.05) {
       // Apply velocity - REDUCED multiplier for slower, more organic growth
       this.x = targetX;
       this.y = targetY;
@@ -411,7 +412,7 @@ export class Organism {
         const testX = this.x + Math.cos(randomAngle) * effectiveSpeed * delta * 5;
         const testY = this.y + Math.sin(randomAngle) * effectiveSpeed * delta * 5;
         
-        if (this.canMoveToPosition(testX, testY)) {
+        if (this.canMoveToPosition(testX, testY) || Math.random() < 0.05) {
           this.x = testX;
           this.y = testY;
           this.vx = Math.cos(randomAngle) * effectiveSpeed;

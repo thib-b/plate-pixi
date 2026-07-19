@@ -248,82 +248,64 @@ export class Plate {
       return false;
     }
     
-    // Calculate spawn probability based on growth progress
-    // Probability decays as plate ages: higher early, lower later
-    const spawnProbability = this.config.spawnBaseProbability * (1 - this.growthProgress);
+    // Calculate spawn probability based on growth progress and coverage
+    // Higher probability when coverage is low, decays as plate ages
+    const progressFactor = 1 - this.growthProgress;
+    const coverageFactor = 1 - this.currentCoverage;
+    const spawnProbability = this.config.spawnBaseProbability * progressFactor * coverageFactor * 2;
     
     // Check if we should attempt a spawn
     if (Math.random() >= spawnProbability) {
       return false;
     }
     
-    // Try to find an untrailed location
-    for (let attempt = 0; attempt < this.maxSpawnAttemptsPerFrame; attempt++) {
-      // Generate random position within plate radius
-      const angle = Math.random() * Math.PI * 2;
-      const distance = Math.random() * this.config.radius * 0.9; // Within 90% of radius
-      const x = Math.cos(angle) * distance;
-      const y = Math.sin(angle) * distance;
+    // Generate random position within plate radius
+    const angle = Math.random() * Math.PI * 2;
+    const distance = Math.random() * this.config.radius * 0.9;
+    const x = Math.cos(angle) * distance;
+    const y = Math.sin(angle) * distance;
+    
+    // Spawn a group of organisms (50-150) at this position
+    const spawnCount = 50 + Math.floor(Math.random() * 101);
+    
+    for (let i = 0; i < spawnCount; i++) {
+      const offsetAngle = Math.random() * Math.PI * 2;
+      const offsetDistance = Math.random() * this.config.radius * 0.05;
+      const spawnX = x + Math.cos(offsetAngle) * offsetDistance;
+      const spawnY = y + Math.sin(offsetAngle) * offsetDistance;
       
-      // Check if this location has low trail density
-      const trailValue = this.trailSystem.getValueInterpolated(x, y);
-      if (trailValue <= this.config.spawnTrailThreshold) {
-        // Found a good spot - spawn a group of organisms (50-150)
-        // Get background color from image at spawn position
-        const spawnCount = 50 + Math.floor(Math.random() * 101); // 50-150 organisms
-        
-        // Spawn multiple organisms at this location
-        for (let i = 0; i < spawnCount; i++) {
-          // Small random offset from spawn center
-          const offsetAngle = Math.random() * Math.PI * 2;
-          const offsetDistance = Math.random() * this.config.radius * 0.05; // 5% of radius spread
-          const spawnX = x + Math.cos(offsetAngle) * offsetDistance;
-          const spawnY = y + Math.sin(offsetAngle) * offsetDistance;
-          
-          // Get background color at spawn position from grid
-          let spawnColor = this.config.baseColor;
-          if (this.trailSystem && this.trailSystem.grid) {
-            spawnColor = this.getGridColorAt(spawnX, spawnY) || this.config.baseColor;
-          }
-          
-          const spawnConfig = {
-            size: this.config.organismSize,
-            speed: this.config.organismSpeed * 0.2,
-            sensorAngle: this.config.sensorAngle,
-            sensorDistance: this.config.sensorDistance * 1.5,
-            trailWeight: this.config.trailWeight * 3,
-            color: spawnColor,
-            organismType: this.config.organismType,
-            colorSimilarityThreshold: this.config.colorSimilarityThreshold,
-            lifespan: this.config.growthDuration * (0.5 + Math.random() * 0.5),
-            growthMode: true,
-            seedIndex: this.spawnSites.length
-          };
-          
-          const organism = new Organism(
-            spawnConfig,
-            spawnX, spawnY,
-            0, 0
-          );
-          
-          organism.x = spawnX;
-          organism.y = spawnY;
-          
-          this.organisms.push(organism);
-          this.container.addChild(organism.getGraphics());
-        }
-        
-        // Track spawn site - use color of the center position
-        const centerColor = this.trailSystem && this.trailSystem.grid
-          ? this.getGridColorAt(x, y) || this.config.baseColor 
-          : this.config.baseColor;
-        this.spawnSites.push({ x, y, color: centerColor, count: spawnCount });
-        
-        return true;
+      let spawnColor = this.config.baseColor;
+      if (this.trailSystem && this.trailSystem.grid) {
+        spawnColor = this.getGridColorAt(spawnX, spawnY) || this.config.baseColor;
       }
+      
+      const spawnConfig = {
+        size: this.config.organismSize,
+        speed: this.config.organismSpeed * 0.2,
+        sensorAngle: this.config.sensorAngle,
+        sensorDistance: this.config.sensorDistance * 1.5,
+        trailWeight: this.config.trailWeight * 3,
+        color: spawnColor,
+        organismType: this.config.organismType,
+        colorSimilarityThreshold: this.config.colorSimilarityThreshold,
+        lifespan: this.config.growthDuration * (0.5 + Math.random() * 0.5),
+        growthMode: true,
+        seedIndex: this.spawnSites.length
+      };
+      
+      const organism = new Organism(spawnConfig, spawnX, spawnY, 0, 0);
+      organism.x = spawnX;
+      organism.y = spawnY;
+      this.organisms.push(organism);
+      this.container.addChild(organism.getGraphics());
     }
     
-    return false;
+    const centerColor = this.trailSystem && this.trailSystem.grid
+      ? this.getGridColorAt(x, y) || this.config.baseColor
+      : this.config.baseColor;
+    this.spawnSites.push({ x, y, color: centerColor, count: spawnCount });
+    
+    return true;
   }
   
   /**
@@ -418,12 +400,12 @@ export class Plate {
     // Try to spawn new organisms at untrailed locations
     this.trySpawnNewOrganism();
     
-    // Check if all organisms are dead - plate is finished
-    // Only mark finished if we've had spawn sites and all organisms are dead
-    if (this.spawnSites.length > 0 && this.organisms.every(org => !org.isAlive()) && !this.isFinished) {
+    // Check if plate is finished based on coverage
+    this.calculateCoverage();
+    if (this.hasReachedTargetCoverage() && !this.isFinished) {
       this.isFinished = true;
       this.isGrowing = false;
-      console.log('Plate finished - all organisms have died');
+      console.log('Plate finished - reached target coverage');
     }
     
     // Update trail system (apply decay)
