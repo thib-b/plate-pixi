@@ -158,14 +158,14 @@ export class TrailSystem {
     // Update color if provided (for per-organism colored trails)
     // Blend with existing color to create gradients
     if (color !== null && color !== undefined) {
-      if (currentValue <= amount) {
+      if (newValue <= amount) {
         // First deposit or small addition - use new color
         this.grid.colors[index] = color;
       } else {
         // Blend existing color with new color based on relative contribution
         // More deposits of same color = that color dominates
         // Mix of colors = blend
-        const existingWeight = (currentValue) / newValue;
+        const existingWeight = (newValue - amount) / newValue;
         const newWeight = amount / newValue;
         this.grid.colors[index] = blendColors(currentColor, color, existingWeight, newWeight);
       }
