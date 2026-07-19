@@ -22,7 +22,7 @@ class PlateApp {
     this.config = {
       width: window.innerWidth,
       height: window.innerHeight,
-      backgroundColor: 0x1a1a2e,
+      backgroundColor: 0xF5F5F5,
       antialias: true,
       resolution: window.devicePixelRatio || 1
     };

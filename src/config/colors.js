@@ -58,8 +58,8 @@ export const AGAR_COLORS = {
   borderAlpha: 1,
   borderWidth: 2,
   
-  // Background (the plate itself)
-  background: 0x1a1a2e,
+  // Background (the page itself)
+  background: 0xF5F5F5,
 };
 
 // Trail colors
