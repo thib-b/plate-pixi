@@ -567,7 +567,7 @@ export class Plate {
   }
 
   /**
-   * Load background image and set plate color to midpoint between darkest and average
+   * Load background image and set plate color to median color
    */
   async loadBackgroundImageAndSetColor() {
     try {
@@ -583,14 +583,11 @@ export class Plate {
       
       this.backgroundImage = img;
       
-      // Get both darkest and average colors
-      const { darkestColor, averageColor } = this.getDarkestAndAverageColorFromImage(img);
+      // Get median color from the image
+      const medianColor = this.getMedianColorFromImage(img);
       
-      // Calculate midpoint color
-      const midpointColor = this.blendColors(darkestColor, averageColor, 0.5, 0.5);
-      
-      // Update plate visual color with the midpoint color
-      this.updatePlateColor(midpointColor);
+      // Update plate visual color with the median color
+      this.updatePlateColor(medianColor);
       
       // Load the background image into the trail system
       if (this.trailSystem) {
@@ -664,6 +661,53 @@ export class Plate {
     const averageColor = (avgR << 16) | (avgG << 8) | avgB;
     
     return { darkestColor, averageColor };
+  }
+
+  /**
+   * Find the median color of an image based on brightness
+   * The median is less affected by outliers than the average
+   * @param {HTMLImageElement} img - The image to analyze
+   * @returns {number} The median color as 0xRRGGBB
+   */
+  getMedianColorFromImage(img) {
+    // Create a canvas to sample the image
+    const canvas = document.createElement('canvas');
+    const ctx = canvas.getContext('2d');
+    
+    // Set canvas to a reasonable size for sampling
+    const sampleWidth = Math.min(img.width, 200);
+    const sampleHeight = Math.min(img.height, 200);
+    
+    canvas.width = sampleWidth;
+    canvas.height = sampleHeight;
+    
+    // Draw the image scaled down
+    ctx.drawImage(img, 0, 0, sampleWidth, sampleHeight);
+    
+    // Get image data
+    const imageData = ctx.getImageData(0, 0, sampleWidth, sampleHeight);
+    const data = imageData.data;
+    
+    // Collect all pixels with their brightness and RGB values
+    const pixels = [];
+    
+    for (let i = 0; i < data.length; i += 4) {
+      const r = data[i];
+      const g = data[i + 1];
+      const b = data[i + 2];
+      const brightness = r * 0.299 + g * 0.587 + b * 0.114;
+      pixels.push({ r, g, b, brightness });
+    }
+    
+    // Sort pixels by brightness
+    pixels.sort((a, b) => a.brightness - b.brightness);
+    
+    // Find the median pixel
+    const midIndex = Math.floor(pixels.length / 2);
+    const medianPixel = pixels[midIndex];
+    
+    // Return median color
+    return (medianPixel.r << 16) | (medianPixel.g << 8) | medianPixel.b;
   }
 
   /**
