@@ -35,13 +35,13 @@ export function generateRandomPalette(count = 8) {
   
   // Generate colors spread around the color wheel
   const colors = [];
-  const baseColor = hslToHex(baseHue, 70, 50);
+  const baseColor = hslToHex(baseHue, 85, 45); // More saturated and slightly darker base
   
   for (let i = 0; i < count; i++) {
     const hueStep = 360 / Math.max(count, 3);
     const hue = (baseHue + (i * hueStep) + Math.random() * 20) % 360;
-    const saturation = 60 + (Math.random() * 40);
-    const lightness = 30 + (Math.random() * 50);
+    const saturation = 80 + (Math.random() * 20); // 80-100% saturation for bold colors
+    const lightness = 25 + (Math.random() * 30); // 25-55% lightness for darker, richer colors
     
     const color = hslToHex(hue, saturation, lightness);
     colors.push(color);
