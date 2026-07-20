@@ -248,17 +248,8 @@ export class Organism {
     // Store trail system reference for sensing
     this.trailSystem = trailSystem;
     
-    // Calculate individual age and progress
+    // Calculate individual age (kept for potential future use)
     this.individualAge = (Date.now() - this.birthTime) / 1000; // age in seconds
-    this.individualProgress = Math.min(this.individualAge / this.lifespan, 1);
-    
-    // Check for death based on individual lifespan
-    if (!this.isDead && this.individualProgress >= 1) {
-      this.isDead = true;
-      this.vx = 0;
-      this.vy = 0;
-      this.graphics.alpha = 0; // Make the particle disappear
-    }
     
     if (this.isDead) {
       return; // Skip the rest of the update for dead organisms
@@ -324,18 +315,8 @@ export class Organism {
   move(delta) {
     const { speed } = this.config;
     
-    // Calculate speed multiplier based on individual progress
-    // At progress=0, speedMultiplier=1 (full speed)
-    // At progress=1, speedMultiplier=0 (stopped)
-    const speedMultiplier = 1 - this.individualProgress;
-    const effectiveSpeed = speed * speedMultiplier;
-    
-    // If plate is finished, don't move at all
-    if (this.growthProgress >= 1) {
-      this.vx = 0;
-      this.vy = 0;
-      return;
-    }
+    // Constant speed - organisms only die when they can't find valid color paths
+    const effectiveSpeed = speed;
     
     // Simple decision logic with high randomness:
     const { left, center, right } = this.sensors;
@@ -388,8 +369,8 @@ export class Organism {
     const targetY = this.y + this.vy * delta * 5;
     
     // Check if movement is allowed based on color similarity
-    // Allow a small chance (5%) to move to dissimilar colors to prevent getting stuck
-    if (this.canMoveToPosition(targetX, targetY) || Math.random() < 0.05) {
+    // Strict color following - only move to similar colors
+    if (this.canMoveToPosition(targetX, targetY)) {
       // Apply velocity - REDUCED multiplier for slower, more organic growth
       this.x = targetX;
       this.y = targetY;
@@ -404,15 +385,19 @@ export class Organism {
         }
       }
     } else {
-      // Movement not allowed - try a random direction
-      // Try up to 5 random directions
+      // Movement not allowed - try random directions
+      // Try more directions (10 attempts) to find a valid color path
       let foundValidDirection = false;
-      for (let i = 0; i < 5; i++) {
+      const numAttempts = 10;
+      
+      for (let i = 0; i < numAttempts; i++) {
         const randomAngle = Math.random() * Math.PI * 2;
         const testX = this.x + Math.cos(randomAngle) * effectiveSpeed * delta * 5;
         const testY = this.y + Math.sin(randomAngle) * effectiveSpeed * delta * 5;
         
-        if (this.canMoveToPosition(testX, testY) || Math.random() < 0.05) {
+        // Check if this direction leads to a similar color
+        // Remove the random 5% chance - we want strict color following now
+        if (this.canMoveToPosition(testX, testY)) {
           this.x = testX;
           this.y = testY;
           this.vx = Math.cos(randomAngle) * effectiveSpeed;
@@ -433,10 +418,13 @@ export class Organism {
         }
       }
       
-      // If no valid direction found, don't move
+      // If no valid direction found after all attempts, the organism is stuck
+      // in an area where all adjacent colors are too different - it should die
       if (!foundValidDirection) {
+        this.isDead = true;
         this.vx = 0;
         this.vy = 0;
+        this.graphics.alpha = 0;
       }
     }
   }
@@ -591,6 +579,7 @@ export class Organism {
 
   /**
    * Check if movement to target position is allowed based on color similarity
+   * and trail occupancy
    * @param {number} targetX - Target x position
    * @param {number} targetY - Target y position
    * @returns {boolean} True if movement is allowed
@@ -606,6 +595,13 @@ export class Organism {
     // If we can't get colors, allow movement
     if (currentColor === null || targetColor === null) {
       return true;
+    }
+    
+    // Check if target position already has significant trail
+    const trailValue = this.trailSystem.getValueInterpolated(targetX, targetY);
+    const trailThreshold = this.trailSystem.options.maxValue * 0.7; // 70% of max trail
+    if (trailValue > trailThreshold) {
+      return false; // Already occupied by trail - don't move there
     }
     
     // Check color similarity

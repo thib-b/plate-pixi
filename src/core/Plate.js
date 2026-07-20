@@ -71,7 +71,8 @@ export class Plate {
     
     // Background image support
     this.backgroundImage = null;
-    this.backgroundImageUrl = config.backgroundImageUrl || 'assets/plate1.png';
+    this.backgroundImageUrl = config.backgroundImageUrl || this.getRandomPlateImage();
+    console.log('Selected plate image:', this.backgroundImageUrl);
     this.backgroundImageLoaded = false; // Flag to track if image is loaded
     
     // Create organisms
@@ -248,11 +249,15 @@ export class Plate {
       return false;
     }
     
-    // Calculate spawn probability based on growth progress and coverage
-    // Higher probability when coverage is low, decays as plate ages
-    const progressFactor = 1 - this.growthProgress;
+    // Calculate spawn probability based on coverage and alive organism count
+    // Higher probability when coverage is low OR when there are few alive organisms
     const coverageFactor = 1 - this.currentCoverage;
-    const spawnProbability = this.config.spawnBaseProbability * progressFactor * coverageFactor * 2;
+    const aliveCount = this.getAliveOrganismCount();
+    const minOrganisms = 50; // Minimum number of alive organisms we want
+    const organismFactor = aliveCount < minOrganisms ? 2 : (1 - Math.min(aliveCount / 500, 1));
+    
+    // Base probability increased, and boosted when organisms are dying
+    const spawnProbability = this.config.spawnBaseProbability * coverageFactor * 3 * Math.max(organismFactor, 1);
     
     // Check if we should attempt a spawn
     if (Math.random() >= spawnProbability) {
@@ -260,10 +265,34 @@ export class Plate {
     }
     
     // Generate random position within plate radius
-    const angle = Math.random() * Math.PI * 2;
-    const distance = Math.random() * this.config.radius * 0.9;
-    const x = Math.cos(angle) * distance;
-    const y = Math.sin(angle) * distance;
+    // Try to find an untrailed spot - check trail value at position
+    let x, y, foundUntrailedSpot = false;
+    const maxAttempts = 20;
+    
+    for (let attempt = 0; attempt < maxAttempts; attempt++) {
+      const angle = Math.random() * Math.PI * 2;
+      const distance = Math.random() * this.config.radius * 0.9;
+      x = Math.cos(angle) * distance;
+      y = Math.sin(angle) * distance;
+      
+      // Check if this spot is untrailed (trail value is low)
+      if (this.trailSystem) {
+        const trailValue = this.trailSystem.getValueInterpolated(x, y);
+        const threshold = this.trailSystem.options.maxValue * 0.1; // 10% of max
+        if (trailValue <= threshold) {
+          foundUntrailedSpot = true;
+          break;
+        }
+      } else {
+        foundUntrailedSpot = true;
+        break;
+      }
+    }
+    
+    // If we couldn't find an untrailed spot after many attempts, don't spawn
+    if (!foundUntrailedSpot) {
+      return false;
+    }
     
     // Spawn a group of organisms (50-150) at this position
     const spawnCount = 50 + Math.floor(Math.random() * 101);
@@ -391,9 +420,8 @@ export class Plate {
           deposit,
           cellColor  // Pass the cell's background color from the image
         );
-        if (Math.random() < 0.01) { // Log 1% of deposits for debugging
-          console.log('Deposit:', {x: organism.x.toFixed(1), y: organism.y.toFixed(1), color: cellColor.toString(16), deposit});
-        }
+        // Log 1% of deposits for debugging
+        //if (Math.random() < 0.01) {console.debug('Deposit:', {x: organism.x.toFixed(1), y: organism.y.toFixed(1), color: cellColor.toString(16), deposit}); }
       }
     });
     
@@ -640,7 +668,7 @@ export class Plate {
   }
 
   /**
-   * Load background image and set plate color to 70% darkest + 30% median
+   * Load background image and set plate color using Color Thief
    */
   async loadBackgroundImageAndSetColor() {
     try {
@@ -656,14 +684,85 @@ export class Plate {
       
       this.backgroundImage = img;
       
-      // Get both median and darkest colors
-      const medianColor = this.getMedianColorFromImage(img);
-      const darkestColor = this.getDarkestColorFromImage(img);
+      // Use Color Thief to extract palette
+      const { getPaletteSync } = await import('colorthief');
+      const palette = getPaletteSync(img, { colorCount: 8 }); // Get 8 colors
+      console.log('Color Thief palette:', palette.map(c => ({
+        rgb: [c.r, c.g, c.b],
+        hex: c.hex(),
+        brightness: ((c.r * 299 + c.g * 587 + c.b * 114) / 1000).toFixed(1),
+        saturation: c.population > 0 ? ((Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b)) / Math.max(c.r, c.g, c.b) * 100).toFixed(1) : '0'
+      })));
       
-      // Blend: 70% darkest, 30% median (closer to darkest)
-      const plateColor = this.blendColors(darkestColor, medianColor, 0.7, 0.3);
+      // Find the darkest main bright (non-grey) color
+      // 1. Filter to get only bright/saturated colors (not grey)
+      // 2. From those, find the darkest one
+      
+      // First, identify bright (saturated) colors - these are the main plate colors
+      // Exclude grey/desaturated colors (saturation < 30)
+      // Note: Color Thief Color objects use _r, _g, _b (not r, g, b)
+      const brightColors = palette.filter(color => {
+        const r = color._r || color.r || 0;
+        const g = color._g || color.g || 0;
+        const b = color._b || color.b || 0;
+        const max = Math.max(r, g, b);
+        const min = Math.min(r, g, b);
+        const saturation = max === 0 ? 0 : (max - min) / max * 100;
+        
+        // Keep colors with good saturation (not grey)
+        const passes = saturation > 30;
+        console.log(`Color [${r},${g},${b}] saturation=${saturation.toFixed(1)}% ${passes ? 'PASSED' : 'FAILED'}`);
+        return passes;
+      });
+      
+      console.log(`Found ${brightColors.length} bright colors out of ${palette.length}`);
+      
+      let plateColor;
+      if (brightColors.length > 0) {
+        // Sort by brightness (darkest first)
+        brightColors.sort((a, b) => {
+          const rA = a._r || a.r || 0;
+          const gA = a._g || a.g || 0;
+          const bA = a._b || a.b || 0;
+          const rB = b._r || b.r || 0;
+          const gB = b._g || b.g || 0;
+          const bB = b._b || b.b || 0;
+          const brightA = (rA * 299 + gA * 587 + bA * 114) / 1000;
+          const brightB = (rB * 299 + gB * 587 + bB * 114) / 1000;
+          return brightA - brightB;
+        });
+        // Use the darkest of the bright colors
+        const selected = brightColors[0];
+        const r = selected._r || selected.r || 0;
+        const g = selected._g || selected.g || 0;
+        const b = selected._b || selected.b || 0;
+        plateColor = this.rgbToHex([r, g, b]);
+        const maxVal = Math.max(r, g, b);
+        const minVal = Math.min(r, g, b);
+        const saturation = maxVal === 0 ? 0 : ((maxVal - minVal) / maxVal * 100).toFixed(1);
+        console.log('Selected darkest bright color:', [r, g, b], 'hex:', plateColor.toString(16), `saturation: ${saturation}%`);
+      } else {
+        // Fallback: use the darkest color from the full palette (even if grey)
+        const darkest = palette.sort((a, b) => {
+          const rA = a._r || a.r || 0;
+          const gA = a._g || a.g || 0;
+          const bA = a._b || a.b || 0;
+          const rB = b._r || b.r || 0;
+          const gB = b._g || b.g || 0;
+          const bB = b._b || b.b || 0;
+          const brightA = (rA * 299 + gA * 587 + bA * 114) / 1000;
+          const brightB = (rB * 299 + gB * 587 + bB * 114) / 1000;
+          return brightA - brightB;
+        })[0];
+        const r = darkest._r || darkest.r || 0;
+        const g = darkest._g || darkest.g || 0;
+        const b = darkest._b || darkest.b || 0;
+        plateColor = this.rgbToHex([r, g, b]);
+        console.log('Fallback to darkest color (no bright colors found):', [r, g, b], 'hex:', plateColor.toString(16));
+      }
       
       // Update plate visual color
+      console.log('Setting plate color to:', plateColor, 'hex:', plateColor.toString(16));
       this.updatePlateColor(plateColor);
       
       // Store the image reference
@@ -671,7 +770,10 @@ export class Plate {
       
       // Load image colors into trail system grid
       if (this.trailSystem) {
+        console.log('Loading image colors into trail system');
         this.trailSystem.loadImageColors(img);
+      } else {
+        console.warn('TrailSystem not available when loading image colors');
       }
       
       // Mark as loaded
@@ -879,6 +981,33 @@ export class Plate {
     if (this.trailSystem) {
       this.trailSystem.options.color = color;
     }
+  }
+
+  /**
+   * Convert RGB array to hex color
+   * @param {number[]} rgb - RGB color as [r, g, b]
+   * @returns {number} Hex color as 0xRRGGBB
+   */
+  rgbToHex([r, g, b]) {
+    return (r << 16) | (g << 8) | b;
+  }
+
+  /**
+   * Get a random plate image URL from available assets
+   * @returns {string} Random plate image path
+   */
+  getRandomPlateImage() {
+    const plateImages = [
+      '/assets/plate1.png',
+      '/assets/plate2.png',
+      '/assets/plate3.png',
+      '/assets/plate4.png',
+      '/assets/plate5.png'
+    ];
+    const randomIndex = Math.floor(Math.random() * plateImages.length);
+    const selected = plateImages[randomIndex];
+    console.log(`Random plate selected: ${selected} (index ${randomIndex})`);
+    return selected;
   }
 
   /**
