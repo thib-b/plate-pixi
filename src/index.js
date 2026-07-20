@@ -94,7 +94,7 @@ class PlateApp {
       }
     }
     
-    // Update bottom FPS and alive display (minimal)
+    // Update bottom FPS, alive, coverage, and target display
     const fpsBottomEl = document.getElementById('fps-bottom-value');
     if (fpsBottomEl) {
       fpsBottomEl.textContent = fps;
@@ -102,6 +102,30 @@ class PlateApp {
     const aliveBottomEl = document.getElementById('alive-bottom-value');
     if (aliveBottomEl) {
       aliveBottomEl.textContent = aliveCount;
+    }
+    
+    // Update coverage, target, and time display
+    if (this.plateManager.plates.size > 0) {
+      const firstPlate = this.plateManager.plates.values().next().value;
+      if (firstPlate) {
+        const coverageEl = document.getElementById('coverage-bottom-value');
+        const targetEl = document.getElementById('target-bottom-value');
+        const timeEl = document.getElementById('time-bottom-value');
+        
+        if (coverageEl) {
+          coverageEl.textContent = `${(firstPlate.currentCoverage * 100).toFixed(1)}%`;
+        }
+        if (targetEl) {
+          const timeElapsed = firstPlate.age;
+          const targetDuration = firstPlate.config.growthDuration || 60;
+          const progressTarget = Math.min(timeElapsed / targetDuration, 1);
+          const targetCoverageAtThisTime = firstPlate.targetCoverage * progressTarget;
+          targetEl.textContent = `${(targetCoverageAtThisTime * 100).toFixed(1)}%`;
+        }
+        if (timeEl) {
+          timeEl.textContent = `${firstPlate.config.growthDuration}s`;
+        }
+      }
     }
     
     // Keep old stats for compatibility (hidden via CSS)
