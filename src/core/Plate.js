@@ -38,11 +38,12 @@ export class Plate {
       depositAmount: 5,
       growthPattern: 'radial',
       trailCellSize: 4, // Trail cell size (balanced between detail and performance)
-      growthDuration: 60, // 60 seconds for testing
-      spawnBaseProbability: 0.01, // Base spawn probability per frame
+      growthDuration: 60, // Target completion time: 60 seconds for 100% coverage
+      spawnBaseProbability: 0.1, // Base spawn probability per frame (higher for reliable growth)
       spawnTrailThreshold: 5, // Max trail value for spawning (find untrailed areas)
       palette: null, // Color palette for organisms (will be set by config)
       colorSimilarityThreshold: 2000, // Squared RGB distance for similar colors
+      growthSpeed: 1.0, // Unified speed multiplier: start at normal, catch up via schedule
       ...config
     };
     
@@ -93,8 +94,13 @@ export class Plate {
     this.spawnAttempts = 0;
     this.maxSpawnAttemptsPerFrame = 10; // Limit attempts to find untrailed spot
     
+    // Available spawning spots - grid cells that are NOT yet trailed
+    // This is a Set of grid indices (using grid coordinates from TrailSystem)
+    // This ensures we always spawn in known untrailed locations instead of random guessing
+    this.availableSpawnSpots = new Set();
+    
     // Coverage tracking for color-based growth
-    this.targetCoverage = 0.8; // 80% coverage target
+    this.targetCoverage = 1.0; // 100% coverage target
     this.currentCoverage = 0;
     
     // Add organisms to container
@@ -107,6 +113,230 @@ export class Plate {
     
     // For debug access
     this.id = config.id || Math.floor(Math.random() * 10000);
+    
+    // Initialize available spawn spots after trail system is created
+    this.initializeAvailableSpawnSpots();
+  }
+  
+  /**
+   * Initialize the available spawn spots set with all grid cells
+   * that are below the trail threshold AND inside the circular plate
+   * (i.e., not yet significantly trailed and within the plate boundary)
+   */
+  initializeAvailableSpawnSpots() {
+    if (!this.trailSystem || !this.trailSystem.grid) {
+      return;
+    }
+    
+    this.availableSpawnSpots.clear();
+    const threshold = this.trailSystem.options.maxValue * 0.1; // 10% of max
+    const totalCells = this.trailSystem.gridWidth * this.trailSystem.gridHeight;
+    const radiusSquared = this.config.radius * this.config.radius;
+    let cellsInCircle = 0;
+    
+    for (let i = 0; i < totalCells; i++) {
+      // Convert flat index to grid coordinates
+      const gridY = Math.floor(i / this.trailSystem.gridWidth);
+      const gridX = i - gridY * this.trailSystem.gridWidth;
+      
+      // Convert grid coordinates to world coordinates
+      const x = (gridX - this.trailSystem.offsetX) * this.trailSystem.options.cellSize;
+      const y = (gridY - this.trailSystem.offsetY) * this.trailSystem.options.cellSize;
+      
+      // Only include cells inside the circular plate
+      const distSquared = x * x + y * y;
+      if (distSquared <= radiusSquared) {
+        cellsInCircle++;
+        if (this.trailSystem.grid.values[i] <= threshold) {
+          this.availableSpawnSpots.add(i);
+        }
+      }
+    }
+    
+    console.log(`Initialized ${this.availableSpawnSpots.size} available spawn spots out of ${cellsInCircle} cells in circle (${totalCells} total grid cells)`);
+  }
+  
+  /**
+   * Update available spawn spots when trail is deposited
+   * Remove a grid cell from available spots if its trail value exceeds the threshold
+   * @param {number} gridX - Grid X coordinate
+   * @param {number} gridY - Grid Y coordinate
+   */
+  updateAvailableSpawnSpots(gridX, gridY) {
+    if (!this.trailSystem || !this.trailSystem.grid) {
+      return;
+    }
+    
+    const threshold = this.trailSystem.options.maxValue * 0.1; // 10% of max
+    const index = this.trailSystem.getIndex(gridX, gridY);
+    const value = this.trailSystem.grid.values[index];
+    
+    if (value > threshold) {
+      this.availableSpawnSpots.delete(index);
+    }
+  }
+  
+  /**
+   * Get a random available spawn spot and convert it to world coordinates
+   * @returns {Object|null} { x, y, gridX, gridY } or null if no spots available
+   */
+  getRandomAvailableSpawnSpot() {
+    if (this.availableSpawnSpots.size === 0) {
+      return null;
+    }
+    
+    // Convert Set to array for random selection
+    const spotIndices = Array.from(this.availableSpawnSpots);
+    const randomIndex = Math.floor(Math.random() * spotIndices.length);
+    const gridIndex = spotIndices[randomIndex];
+    
+    // Convert flat grid index to 2D coordinates
+    const gridY = Math.floor(gridIndex / this.trailSystem.gridWidth);
+    const gridX = gridIndex - gridY * this.trailSystem.gridWidth;
+    
+    // Convert grid coordinates to world coordinates
+    const x = (gridX - this.trailSystem.offsetX) * this.trailSystem.options.cellSize;
+    const y = (gridY - this.trailSystem.offsetY) * this.trailSystem.options.cellSize;
+    
+    return { x, y, gridX, gridY, gridIndex };
+  }
+  
+  /**
+   * Check if a grid cell is in available spawn spots
+   * @param {number} gridX - Grid X coordinate
+   * @param {number} gridY - Grid Y coordinate
+   * @returns {boolean}
+   */
+  isSpotAvailable(gridX, gridY) {
+    if (!this.trailSystem || !this.trailSystem.grid) {
+      return true;
+    }
+    const index = this.trailSystem.getIndex(gridX, gridY);
+    return this.availableSpawnSpots.has(index);
+  }
+  
+  /**
+   * Spawn organisms in ALL remaining available spots at once
+   * Used when we're close to completion to ensure we finish
+   * @returns {boolean} True if any organisms were spawned
+   */
+  spawnInAllAvailableSpots() {
+    if (this.availableSpawnSpots.size === 0) {
+      return false;
+    }
+    
+    // Prevent out of memory - check if we have room for live organisms
+    const maxLiveOrganisms = 1000;
+    const aliveCount = this.getAliveOrganismCount();
+    const estimatedNewCount = this.availableSpawnSpots.size * 50; // 50 per spot max
+    if (aliveCount + estimatedNewCount > maxLiveOrganisms) {
+      console.warn(`Would exceed live organism cap (${maxLiveOrganisms}), skipping finish mode spawn`);
+      return false;
+    }
+    
+    console.log(`FINISH MODE: Spawning in all ${this.availableSpawnSpots.size} remaining spots`);
+    
+    const spotIndices = Array.from(this.availableSpawnSpots);
+    let spawnedAny = false;
+    
+    // Clear all available spots since we're about to fill them
+    this.availableSpawnSpots.clear();
+    
+    for (const gridIndex of spotIndices) {
+      // Convert flat grid index to 2D coordinates
+      const gridY = Math.floor(gridIndex / this.trailSystem.gridWidth);
+      const gridX = gridIndex - gridY * this.trailSystem.gridWidth;
+      
+      // Convert grid coordinates to world coordinates
+      const x = (gridX - this.trailSystem.offsetX) * this.trailSystem.options.cellSize;
+      const y = (gridY - this.trailSystem.offsetY) * this.trailSystem.options.cellSize;
+      
+      // Get color at this spot
+      let spawnColor = this.config.baseColor;
+      if (this.trailSystem && this.trailSystem.grid) {
+        spawnColor = this.trailSystem.grid.colors[gridIndex] || this.config.baseColor;
+      }
+      
+      // Spawn a small group at this spot
+      const spawnCount = 20 + Math.floor(Math.random() * 31); // 20-50 organisms per spot
+      
+      for (let i = 0; i < spawnCount; i++) {
+        const offsetAngle = Math.random() * Math.PI * 2;
+        const offsetDistance = Math.random() * this.config.radius * 0.02; // Small spread
+        const spawnX = x + Math.cos(offsetAngle) * offsetDistance;
+        const spawnY = y + Math.sin(offsetAngle) * offsetDistance;
+        
+        const spawnConfig = {
+          size: this.config.organismSize,
+          speed: this.config.organismSpeed * 0.2 * this.config.growthSpeed,
+          sensorAngle: this.config.sensorAngle,
+          sensorDistance: this.config.sensorDistance * 1.5,
+          trailWeight: this.config.trailWeight * 3,
+          color: spawnColor,
+          organismType: this.config.organismType,
+          colorSimilarityThreshold: this.config.colorSimilarityThreshold,
+          lifespan: this.config.growthDuration * (0.1 + Math.random() * 0.2),
+          growthMode: true,
+          seedIndex: this.spawnSites.length
+        };
+        
+        const organism = new Organism(spawnConfig, spawnX, spawnY, 0, 0);
+        organism.x = spawnX;
+        organism.y = spawnY;
+        this.organisms.push(organism);
+        this.container.addChild(organism.getGraphics());
+      }
+      
+      this.spawnSites.push({ x, y, color: spawnColor, count: spawnCount });
+      spawnedAny = true;
+    }
+    
+    return spawnedAny;
+  }
+  
+  /**
+   * Remove a circular area around a spawn point from available spawn spots
+   * This prevents spawning too close to existing spawn locations
+   * @param {number} x - World x position of spawn center
+   * @param {number} y - World y position of spawn center
+   * @param {number} radius - Radius of area to clear (in world units, default: 5% of plate radius)
+   */
+  removeSpawnAreaFromAvailable(x, y, radius = null) {
+    if (!this.trailSystem || !this.trailSystem.grid) {
+      return;
+    }
+    
+    const clearRadius = radius || this.config.radius * 0.05;
+    const clearRadiusSquared = clearRadius * clearRadius;
+    
+    // Convert world position to grid coordinates
+    const centerGridX = Math.floor(x * this.trailSystem.invCellSize + this.trailSystem.offsetX);
+    const centerGridY = Math.floor(y * this.trailSystem.invCellSize + this.trailSystem.offsetY);
+    
+    // Iterate through nearby grid cells in a square area
+    const searchRadius = Math.ceil(clearRadius / this.trailSystem.options.cellSize);
+    const minX = Math.max(0, centerGridX - searchRadius);
+    const maxX = Math.min(this.trailSystem.gridWidth - 1, centerGridX + searchRadius);
+    const minY = Math.max(0, centerGridY - searchRadius);
+    const maxY = Math.min(this.trailSystem.gridHeight - 1, centerGridY + searchRadius);
+    
+    for (let gx = minX; gx <= maxX; gx++) {
+      for (let gy = minY; gy <= maxY; gy++) {
+        // Convert grid to world to check distance
+        const wx = (gx - this.trailSystem.offsetX) * this.trailSystem.options.cellSize;
+        const wy = (gy - this.trailSystem.offsetY) * this.trailSystem.options.cellSize;
+        
+        const dx = wx - x;
+        const dy = wy - y;
+        const distSquared = dx * dx + dy * dy;
+        
+        // If within the clear radius, remove from available spots
+        if (distSquared <= clearRadiusSquared) {
+          const index = this.trailSystem.getIndex(gx, gy);
+          this.availableSpawnSpots.delete(index);
+        }
+      }
+    }
   }
   
   /**
@@ -200,15 +430,15 @@ export class Plate {
     
     const organismConfig = {
       size: this.config.organismSize,
-      speed: this.config.organismSpeed * 0.2, // Much slower for growth patterns
+      speed: this.config.organismSpeed * 0.2 * this.config.growthSpeed, // Much slower for growth patterns, multiplied by growthSpeed
       sensorAngle: this.config.sensorAngle,
       sensorDistance: this.config.sensorDistance * 1.5, // Longer sensors for better trail detection
       trailWeight: this.config.trailWeight * 3, // Heavier trails for stronger reinforcement
       color: spawnColor, // Use background image color
       organismType: this.config.organismType,
       colorSimilarityThreshold: this.config.colorSimilarityThreshold,
-      // Individual lifespan - random within plate's growth duration
-      lifespan: this.config.growthDuration * (0.5 + Math.random() * 0.5),
+      // Individual lifespan - shorter lifespan so organisms die faster and make room for new ones
+      lifespan: this.config.growthDuration * (0.1 + Math.random() * 0.2),
       // Growth-specific parameters
       growthMode: true,
       seedIndex: seedIndex
@@ -233,11 +463,21 @@ export class Plate {
   
   /**
    * Try to spawn a new organism at a random untrailed location
-   * @returns {boolean} True if spawn was successful
+   * Uses the availableSpawnSpots mechanism to always spawn in known untrailed areas
+   * @param {number} spawnMultiplier - How many times to attempt spawning (default 1)
+   * @returns {boolean} True if at least one spawn was successful
    */
-  trySpawnNewOrganism() {
+  trySpawnNewOrganism(spawnMultiplier = 1) {
     // Don't spawn until image is loaded
     if (!this.backgroundImageLoaded) {
+      return false;
+    }
+    
+    // Prevent out of memory - cap live organisms
+    const maxLiveOrganisms = 1000; // Safety cap for live organisms only
+    const aliveCount = this.getAliveOrganismCount();
+    if (aliveCount >= maxLiveOrganisms) {
+      console.warn(`Live organism cap reached (${maxLiveOrganisms}), stopping spawns`);
       return false;
     }
     
@@ -249,92 +489,120 @@ export class Plate {
       return false;
     }
     
-    // Calculate spawn probability based on coverage and alive organism count
-    // Higher probability when coverage is low OR when there are few alive organisms
-    const coverageFactor = 1 - this.currentCoverage;
-    const aliveCount = this.getAliveOrganismCount();
+    // Time-based spawning: calculate how much we should have grown by now
+    // to finish at the target duration
+    const targetDuration = this.config.growthDuration || 600; // Default 10 minutes
+    const timeElapsed = this.age;
+    const progressTarget = Math.min(timeElapsed / targetDuration, 1);
+    const targetCoverageAtThisTime = this.targetCoverage * progressTarget;
+    
+    // If we're behind schedule, spawn more aggressively
+    // If we're ahead, spawn less
+    const behindSchedule = this.currentCoverage < targetCoverageAtThisTime;
+    const scheduleFactor = behindSchedule ? 1.5 : 0.5; // Boost when behind
+    
+    // Debug logging - also show available spawn spots count
+    if (Math.floor(this.age) % 5 === 0) { // Log every 5 seconds for 60s target
+      console.log(`[${timeElapsed.toFixed(0)}s/${this.config.growthDuration}s] Coverage: ${(this.currentCoverage * 100).toFixed(1)}% | Target: ${(targetCoverageAtThisTime * 100).toFixed(1)}% | ${behindSchedule ? 'BEHIND' : 'AHEAD'} schedule | Available spots: ${this.availableSpawnSpots.size}`);
+    }
+    
+    // Calculate spawn probability based on schedule, organism count, and growthSpeed
+    // Note: We don't use coverageFactor here because availableSpawnSpots already ensures
+    // we only spawn in untrailed areas. The spawning slows down naturally as availableSpots shrinks.
     const minOrganisms = 50; // Minimum number of alive organisms we want
     const organismFactor = aliveCount < minOrganisms ? 2 : (1 - Math.min(aliveCount / 500, 1));
     
-    // Base probability increased, and boosted when organisms are dying
-    const spawnProbability = this.config.spawnBaseProbability * coverageFactor * 3 * Math.max(organismFactor, 1);
+    // Base probability adjusted for schedule and growthSpeed
+    // growthSpeed affects both spawning rate and movement speed
+    // When behind schedule, be MORE aggressive, not less
+    const behindFactor = behindSchedule ? 3.0 : 1.0; // Strong boost when behind
+    const baseSpawnProbability = this.config.spawnBaseProbability * 3 * Math.max(organismFactor, 1) * behindFactor * this.config.growthSpeed;
     
-    // Check if we should attempt a spawn
-    if (Math.random() >= spawnProbability) {
-      return false;
+    // If we have very few available spots left (less than 1% of total), spawn in ALL of them at once to finish
+    const totalCells = this.trailSystem.gridWidth * this.trailSystem.gridHeight;
+    const lowSpotsThreshold = Math.max(10, totalCells * 0.01); // Only trigger with <1% remaining or <10 spots
+    if (this.availableSpawnSpots.size <= lowSpotsThreshold && this.availableSpawnSpots.size > 0) {
+      // Spawn in ALL remaining spots at once - finish the plate
+      return this.spawnInAllAvailableSpots();
     }
     
-    // Generate random position within plate radius
-    // Try to find an untrailed spot - check trail value at position
-    let x, y, foundUntrailedSpot = false;
-    const maxAttempts = 20;
-    
-    for (let attempt = 0; attempt < maxAttempts; attempt++) {
-      const angle = Math.random() * Math.PI * 2;
-      const distance = Math.random() * this.config.radius * 0.9;
-      x = Math.cos(angle) * distance;
-      y = Math.sin(angle) * distance;
+    // Try multiple spawns based on multiplier
+    let anySpawned = false;
+    for (let attempt = 0; attempt < spawnMultiplier; attempt++) {
+      // Check if we should attempt a spawn this time
+      if (Math.random() >= baseSpawnProbability) {
+        continue; // Skip this attempt
+      }
       
-      // Check if this spot is untrailed (trail value is low)
-      if (this.trailSystem) {
-        const trailValue = this.trailSystem.getValueInterpolated(x, y);
-        const threshold = this.trailSystem.options.maxValue * 0.1; // 10% of max
-        if (trailValue <= threshold) {
-          foundUntrailedSpot = true;
-          break;
+      // Use the available spawn spots mechanism - get a known untrailed spot
+      let spawnSpot = this.getRandomAvailableSpawnSpot();
+      
+      // If no available spots, we can't spawn (plate is full)
+      if (!spawnSpot) {
+        // Re-initialize available spots in case there's a discrepancy
+        // (this can happen if spots were removed but trails decayed)
+        this.initializeAvailableSpawnSpots();
+        const retrySpot = this.getRandomAvailableSpawnSpot();
+        if (!retrySpot) {
+          continue; // No spots available, skip this attempt
         }
-      } else {
-        foundUntrailedSpot = true;
-        break;
-      }
-    }
-    
-    // If we couldn't find an untrailed spot after many attempts, don't spawn
-    if (!foundUntrailedSpot) {
-      return false;
-    }
-    
-    // Spawn a group of organisms (50-150) at this position
-    const spawnCount = 50 + Math.floor(Math.random() * 101);
-    
-    for (let i = 0; i < spawnCount; i++) {
-      const offsetAngle = Math.random() * Math.PI * 2;
-      const offsetDistance = Math.random() * this.config.radius * 0.05;
-      const spawnX = x + Math.cos(offsetAngle) * offsetDistance;
-      const spawnY = y + Math.sin(offsetAngle) * offsetDistance;
-      
-      let spawnColor = this.config.baseColor;
-      if (this.trailSystem && this.trailSystem.grid) {
-        spawnColor = this.getGridColorAt(spawnX, spawnY) || this.config.baseColor;
+        spawnSpot = retrySpot;
       }
       
-      const spawnConfig = {
-        size: this.config.organismSize,
-        speed: this.config.organismSpeed * 0.2,
-        sensorAngle: this.config.sensorAngle,
-        sensorDistance: this.config.sensorDistance * 1.5,
-        trailWeight: this.config.trailWeight * 3,
-        color: spawnColor,
-        organismType: this.config.organismType,
-        colorSimilarityThreshold: this.config.colorSimilarityThreshold,
-        lifespan: this.config.growthDuration * (0.5 + Math.random() * 0.5),
-        growthMode: true,
-        seedIndex: this.spawnSites.length
-      };
+      // Use the known available spot
+      let x = spawnSpot.x;
+      let y = spawnSpot.y;
       
-      const organism = new Organism(spawnConfig, spawnX, spawnY, 0, 0);
-      organism.x = spawnX;
-      organism.y = spawnY;
-      this.organisms.push(organism);
-      this.container.addChild(organism.getGraphics());
+      // Remove this spawn spot and nearby area from available spots
+      // since we're about to spawn organisms here which will create trails
+      this.removeSpawnAreaFromAvailable(x, y);
+      
+      // Spawn a group of organisms at this position
+      // Moderate group size for controlled growth
+      const baseSpawnCount = 50 + Math.floor(Math.random() * 51); // 50-100 organisms
+      const spawnCount = Math.floor(baseSpawnCount * this.config.growthSpeed);
+      
+      for (let i = 0; i < spawnCount; i++) {
+        const offsetAngle = Math.random() * Math.PI * 2;
+        const offsetDistance = Math.random() * this.config.radius * 0.05;
+        const spawnX = x + Math.cos(offsetAngle) * offsetDistance;
+        const spawnY = y + Math.sin(offsetAngle) * offsetDistance;
+        
+        let spawnColor = this.config.baseColor;
+        if (this.trailSystem && this.trailSystem.grid) {
+          spawnColor = this.getGridColorAt(spawnX, spawnY) || this.config.baseColor;
+        }
+        
+        const spawnConfig = {
+          size: this.config.organismSize,
+          speed: this.config.organismSpeed * 0.2 * this.config.growthSpeed,
+          sensorAngle: this.config.sensorAngle,
+          sensorDistance: this.config.sensorDistance * 1.5,
+          trailWeight: this.config.trailWeight * 3,
+          color: spawnColor,
+          organismType: this.config.organismType,
+          colorSimilarityThreshold: this.config.colorSimilarityThreshold,
+          lifespan: this.config.growthDuration * (0.1 + Math.random() * 0.2),
+          growthMode: true,
+          seedIndex: this.spawnSites.length
+        };
+        
+        const organism = new Organism(spawnConfig, spawnX, spawnY, 0, 0);
+        organism.x = spawnX;
+        organism.y = spawnY;
+        this.organisms.push(organism);
+        this.container.addChild(organism.getGraphics());
+      }
+      
+      const centerColor = this.trailSystem && this.trailSystem.grid
+        ? this.getGridColorAt(x, y) || this.config.baseColor
+        : this.config.baseColor;
+      this.spawnSites.push({ x, y, color: centerColor, count: spawnCount });
+      
+      anySpawned = true;
     }
     
-    const centerColor = this.trailSystem && this.trailSystem.grid
-      ? this.getGridColorAt(x, y) || this.config.baseColor
-      : this.config.baseColor;
-    this.spawnSites.push({ x, y, color: centerColor, count: spawnCount });
-    
-    return true;
+    return anySpawned;
   }
   
   /**
@@ -420,13 +688,29 @@ export class Plate {
           deposit,
           cellColor  // Pass the cell's background color from the image
         );
+        
+        // Update available spawn spots - check if this deposit made the cell no longer available
+        if (this.trailSystem) {
+          const gridX = Math.floor(organism.x * this.trailSystem.invCellSize + this.trailSystem.offsetX);
+          const gridY = Math.floor(organism.y * this.trailSystem.invCellSize + this.trailSystem.offsetY);
+          this.updateAvailableSpawnSpots(gridX, gridY);
+        }
+        
         // Log 1% of deposits for debugging
         //if (Math.random() < 0.01) {console.debug('Deposit:', {x: organism.x.toFixed(1), y: organism.y.toFixed(1), color: cellColor.toString(16), deposit}); }
       }
     });
     
     // Try to spawn new organisms at untrailed locations
-    this.trySpawnNewOrganism();
+    // Use dynamic multiplier based on how behind schedule we are
+    const timeElapsed = this.age;
+    const progressTarget = Math.min(timeElapsed / this.config.growthDuration, 1);
+    const targetCoverageAtThisTime = this.targetCoverage * progressTarget;
+    const behindSchedule = this.currentCoverage < targetCoverageAtThisTime;
+    // If behind, spawn MORE aggressively (up to 10x multiplier when badly behind)
+    const coverageGap = targetCoverageAtThisTime - this.currentCoverage;
+    const spawnMultiplier = behindSchedule ? Math.max(1, Math.min(10, 1 + Math.floor(coverageGap * 10))) : 1;
+    this.trySpawnNewOrganism(spawnMultiplier);
     
     // Check if plate is finished based on coverage
     this.calculateCoverage();
@@ -438,6 +722,13 @@ export class Plate {
     
     // Update trail system (apply decay)
     this.trailSystem.update(delta, this.config.decayRate);
+    
+    // After decay, some cells might have dropped below threshold and become available again
+    // Re-initialize the available spawn spots to pick up any newly available cells
+    // Only do this occasionally to avoid performance overhead
+    if (this.config.decayRate > 0 && Math.random() < 0.1) { // 10% chance per frame to recheck
+      this.initializeAvailableSpawnSpots();
+    }
     
     // Update plate visual based on growth
     this.updatePlateVisual();
@@ -469,6 +760,10 @@ export class Plate {
     this.isFinished = false;
     this.startTime = Date.now();
     this.spawnSites = []; // Reset spawn tracking
+    this.availableSpawnSpots.clear(); // Clear available spawn spots
+    
+    // Re-initialize available spawn spots
+    this.initializeAvailableSpawnSpots();
     
     // Create new organisms
     this.createOrganisms(this.config.organismCount);
@@ -553,7 +848,8 @@ export class Plate {
 
   /**
    * Calculate current plate coverage (percentage of cells with trails)
-   * @returns {number} Coverage as 0-1
+   * Only counts cells that are inside the circular plate boundary
+   * @returns {number} Coverage as 0-1 (1.0 = all cells inside circle have trails)
    */
   calculateCoverage() {
     if (!this.trailSystem) return 0;
@@ -561,17 +857,36 @@ export class Plate {
     const grid = this.trailSystem.grid;
     const totalCells = grid.width * grid.height;
     let coveredCells = 0;
+    let cellsInCircle = 0; // Only count cells inside the circular plate
     
-    // Count cells with trail density above a small threshold
-    const threshold = this.trailSystem.options.maxValue * 0.01; // 1% of max
+    // Count cells with trail density above a very small threshold
+    const threshold = this.trailSystem.options.maxValue * 0.001; // 0.1% of max (more sensitive)
     
     for (let i = 0; i < totalCells; i++) {
-      if (grid.values[i] > threshold) {
-        coveredCells++;
+      // Convert flat index to grid coordinates
+      const gridY = Math.floor(i / grid.width);
+      const gridX = i - gridY * grid.width;
+      
+      // Convert grid coordinates to world coordinates
+      const x = (gridX - this.trailSystem.offsetX) * this.trailSystem.options.cellSize;
+      const y = (gridY - this.trailSystem.offsetY) * this.trailSystem.options.cellSize;
+      
+      // Check if this cell is inside the circular plate
+      const distSquared = x * x + y * y;
+      const radiusSquared = this.config.radius * this.config.radius;
+      
+      if (distSquared <= radiusSquared) {
+        // Cell is inside the circle - count it
+        cellsInCircle++;
+        if (grid.values[i] > threshold) {
+          coveredCells++;
+        }
       }
     }
     
-    this.currentCoverage = coveredCells / totalCells;
+    // Coverage is ratio of covered cells to cells inside the circle
+    // If no cells in circle (shouldn't happen), fallback to 0
+    this.currentCoverage = cellsInCircle > 0 ? coveredCells / cellsInCircle : 0;
     return this.currentCoverage;
   }
 
@@ -684,82 +999,42 @@ export class Plate {
       
       this.backgroundImage = img;
       
-      // Use Color Thief to extract palette
+      // Use Color Thief to extract the 4 main colors from the image
       const { getPaletteSync } = await import('colorthief');
-      const palette = getPaletteSync(img, { colorCount: 8 }); // Get 8 colors
-      console.log('Color Thief palette:', palette.map(c => ({
-        rgb: [c.r, c.g, c.b],
+      const palette = getPaletteSync(img, { colorCount: 4 }); // Get 4 main colors
+      console.log('Color Thief palette (4 main colors):', palette.map(c => ({
+        rgb: [c._r || c.r || 0, c._g || c.g || 0, c._b || c.b || 0],
         hex: c.hex(),
-        brightness: ((c.r * 299 + c.g * 587 + c.b * 114) / 1000).toFixed(1),
-        saturation: c.population > 0 ? ((Math.max(c.r, c.g, c.b) - Math.min(c.r, c.g, c.b)) / Math.max(c.r, c.g, c.b) * 100).toFixed(1) : '0'
+        population: c.population || 0
       })));
       
-      // Find the darkest main bright (non-grey) color
-      // 1. Filter to get only bright/saturated colors (not grey)
-      // 2. From those, find the darkest one
-      
-      // First, identify bright (saturated) colors - these are the main plate colors
-      // Exclude grey/desaturated colors (saturation < 30)
-      // Note: Color Thief Color objects use _r, _g, _b (not r, g, b)
-      const brightColors = palette.filter(color => {
+      // Find the darkest/most vibrant color from the palette
+      // Calculate brightness and saturation for each color, then score them
+      const scoredColors = palette.map(color => {
         const r = color._r || color.r || 0;
         const g = color._g || color.g || 0;
         const b = color._b || color.b || 0;
         const max = Math.max(r, g, b);
         const min = Math.min(r, g, b);
         const saturation = max === 0 ? 0 : (max - min) / max * 100;
+        const brightness = (r * 299 + g * 587 + b * 114) / 1000;
         
-        // Keep colors with good saturation (not grey)
-        const passes = saturation > 30;
-        console.log(`Color [${r},${g},${b}] saturation=${saturation.toFixed(1)}% ${passes ? 'PASSED' : 'FAILED'}`);
-        return passes;
+        // Score: darkest + most vibrant
+        // Lower brightness = better (darker), higher saturation = better (more vibrant)
+        // We want to maximize (saturation - brightness) to get dark vibrant colors
+        const score = saturation - brightness;
+        
+        return { color, r, g, b, saturation, brightness, score };
       });
       
-      console.log(`Found ${brightColors.length} bright colors out of ${palette.length}`);
+      // Sort by score (highest first) = most vibrant and darkest
+      scoredColors.sort((a, b) => b.score - a.score);
       
-      let plateColor;
-      if (brightColors.length > 0) {
-        // Sort by brightness (darkest first)
-        brightColors.sort((a, b) => {
-          const rA = a._r || a.r || 0;
-          const gA = a._g || a.g || 0;
-          const bA = a._b || a.b || 0;
-          const rB = b._r || b.r || 0;
-          const gB = b._g || b.g || 0;
-          const bB = b._b || b.b || 0;
-          const brightA = (rA * 299 + gA * 587 + bA * 114) / 1000;
-          const brightB = (rB * 299 + gB * 587 + bB * 114) / 1000;
-          return brightA - brightB;
-        });
-        // Use the darkest of the bright colors
-        const selected = brightColors[0];
-        const r = selected._r || selected.r || 0;
-        const g = selected._g || selected.g || 0;
-        const b = selected._b || selected.b || 0;
-        plateColor = this.rgbToHex([r, g, b]);
-        const maxVal = Math.max(r, g, b);
-        const minVal = Math.min(r, g, b);
-        const saturation = maxVal === 0 ? 0 : ((maxVal - minVal) / maxVal * 100).toFixed(1);
-        console.log('Selected darkest bright color:', [r, g, b], 'hex:', plateColor.toString(16), `saturation: ${saturation}%`);
-      } else {
-        // Fallback: use the darkest color from the full palette (even if grey)
-        const darkest = palette.sort((a, b) => {
-          const rA = a._r || a.r || 0;
-          const gA = a._g || a.g || 0;
-          const bA = a._b || a.b || 0;
-          const rB = b._r || b.r || 0;
-          const gB = b._g || b.g || 0;
-          const bB = b._b || b.b || 0;
-          const brightA = (rA * 299 + gA * 587 + bA * 114) / 1000;
-          const brightB = (rB * 299 + gB * 587 + bB * 114) / 1000;
-          return brightA - brightB;
-        })[0];
-        const r = darkest._r || darkest.r || 0;
-        const g = darkest._g || darkest.g || 0;
-        const b = darkest._b || darkest.b || 0;
-        plateColor = this.rgbToHex([r, g, b]);
-        console.log('Fallback to darkest color (no bright colors found):', [r, g, b], 'hex:', plateColor.toString(16));
-      }
+      const best = scoredColors[0];
+      const plateColor = this.rgbToHex([best.r, best.g, best.b]);
+      
+      console.log(`Selected darkest/most vibrant: [${best.r},${best.g},${best.b}] hex: ${plateColor.toString(16)} ` +
+        `score: ${best.score.toFixed(1)} (sat: ${best.saturation.toFixed(1)}%, bright: ${best.brightness.toFixed(1)})`);
       
       // Update plate visual color
       console.log('Setting plate color to:', plateColor, 'hex:', plateColor.toString(16));
@@ -779,10 +1054,16 @@ export class Plate {
       // Mark as loaded
       this.backgroundImageLoaded = true;
       
+      // Re-initialize available spawn spots after image is loaded
+      // (trail system grid may have been updated with image colors)
+      this.initializeAvailableSpawnSpots();
+      
     } catch (error) {
       console.error('Failed to load background image:', error);
       // Fallback: mark as loaded so spawning can proceed with default colors
       this.backgroundImageLoaded = true;
+      // Still initialize available spawn spots
+      this.initializeAvailableSpawnSpots();
     }
   }
 

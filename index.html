@@ -2,8 +2,18 @@
 <html lang="en">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>platev3 - Plate Simulation</title>
+  
+  <!-- PWA Meta Tags -->
+  <meta name="theme-color" content="#333333">
+  <meta name="background-color" content="#F5F5F5">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="platev3">
+  <meta name="mobile-web-app-capable" content="yes">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-180x180.png">
   <style>
     * {
       margin: 0;
@@ -194,6 +204,30 @@
       }
     }
   </script>
-  <div id="fps-bottom">FPS: <span id="fps-bottom-value">0</span> | Alive: <span id="alive-bottom-value">0</span></div>
+  <div id="fps-bottom">FPS: <span id="fps-bottom-value">0</span> | Alive: <span id="alive-bottom-value">0</span> | Coverage: <span id="coverage-bottom-value">0%</span> | Target: <span id="target-bottom-value">0%</span> / <span id="time-bottom-value">60s</span></div>
+  
+  <!-- PWA Service Worker Registration -->
+  <script>
+    // Register service worker for PWA support
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('/sw.js')
+          .then((registration) => {
+            console.log('ServiceWorker registration successful:', registration);
+          })
+          .catch((error) => {
+            console.log('ServiceWorker registration failed:', error);
+          });
+      });
+    }
+    
+    // Check if app was launched from home screen (iOS)
+    if (window.matchMedia('(display-mode: standalone)').matches || 
+        window.navigator.standalone || 
+        document.referrer.includes('android-app://')) {
+      // Running as PWA - fullscreen mode
+      console.log('Running as PWA');
+    }
+  </script>
 </body>
 </html>

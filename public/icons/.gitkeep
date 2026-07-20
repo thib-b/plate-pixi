@@ -1,0 +1,11 @@
+# Placeholder - add your icon files here:
+# Required for PWA:
+# - icon-192x192.png (Android)
+# - icon-512x512.png (Android)
+# - icon-180x180.png (iOS)
+# - icon-512x512-maskable.png (Android, for adaptive icons)
+
+# Generate icons from a source image:
+# 1. Create a square source image (1024x1024 recommended)
+# 2. Use https://realfavicongenerator.net/ to generate all sizes
+# 3. Place the generated icons in this folder

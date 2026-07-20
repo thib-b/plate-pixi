@@ -386,7 +386,7 @@ export class Organism {
       }
     } else {
       // Movement not allowed - try random directions
-      // Try more directions (10 attempts) to find a valid color path
+      // Try 10 directions to find a valid path (color match + not trailed + inside plate)
       let foundValidDirection = false;
       const numAttempts = 10;
       
@@ -419,7 +419,7 @@ export class Organism {
       }
       
       // If no valid direction found after all attempts, the organism is stuck
-      // in an area where all adjacent colors are too different - it should die
+      // All adjacent positions are dead-ends: wrong color, already trailed, or outside plate
       if (!foundValidDirection) {
         this.isDead = true;
         this.vx = 0;
@@ -578,8 +578,8 @@ export class Organism {
   }
 
   /**
-   * Check if movement to target position is allowed based on color similarity
-   * and trail occupancy
+   * Check if movement to target position is allowed based on color similarity,
+   * trail occupancy, and plate boundaries
    * @param {number} targetX - Target x position
    * @param {number} targetY - Target y position
    * @returns {boolean} True if movement is allowed
@@ -587,6 +587,14 @@ export class Organism {
   canMoveToPosition(targetX, targetY) {
     if (!this.trailSystem || !this.trailSystem.grid) {
       return true; // No grid, allow any movement
+    }
+    
+    // Check if target is outside plate boundary
+    const dx = targetX - this.plateX;
+    const dy = targetY - this.plateY;
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > this.plateRadius) {
+      return false; // Target is outside plate - dead end
     }
     
     const currentColor = this.getCurrentCellColor();
